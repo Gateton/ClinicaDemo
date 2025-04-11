@@ -1,187 +1,160 @@
-import { useState } from "react";
-import { Link, useLocation } from "wouter";
-import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
-import { ProfileDropdown } from "@/components/shared/profile-dropdown";
-import { NotificationsDropdown } from "@/components/shared/notifications-dropdown";
+import React, { useState } from 'react';
+import { Link, useLocation } from 'wouter';
+import { useAuth } from '@/hooks/use-auth';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import Logo from '@/components/ui/logo';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { ChevronDown, LogOut } from 'lucide-react';
 import {
-  Home,
-  Calendar,
-  Torus,
-  Images,
-  User,
-  Settings,
-  Menu,
-  X
-} from "lucide-react";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-type PatientLayoutProps = {
+// Patient navigation items
+const navItems = [
+  { label: 'Mi Tratamiento', href: '/patient' },
+  { label: 'Mis Citas', href: '/patient/appointments' },
+  { label: 'Galería de Imágenes', href: '/patient/gallery' },
+  { label: 'Mi Perfil', href: '/patient/profile' },
+];
+
+interface PatientLayoutProps {
   children: React.ReactNode;
-  title?: string;
-  subtitle?: string;
-};
+}
 
-export function PatientLayout({ children, title = "Mi Portal", subtitle = "Bienvenido a tu portal de paciente de Delica Dental." }: PatientLayoutProps) {
+const PatientLayout: React.FC<PatientLayoutProps> = ({ children }) => {
   const [location] = useLocation();
-  const { user } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, logoutMutation } = useAuth();
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
-  const navigationItems = [
-    { href: "/patient", label: "Panel Principal", icon: Home },
-    { href: "/patient/appointments", label: "Mis Citas", icon: Calendar },
-    { href: "/patient/treatment", label: "Mi Tratamiento", icon: Torus },
-    { href: "/patient/images", label: "Mis Imágenes", icon: Images },
-    { href: "/patient/profile", label: "Mi Perfil", icon: User },
-  ];
-
-  const isActive = (path: string) => {
-    return location === path;
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase();
   };
 
+  const handleLogout = () => {
+    logoutMutation.mutate();
+    setLogoutDialogOpen(false);
+  };
+
+  // Get user's initials for avatar
+  const userInitials = user?.fullName ? getInitials(user.fullName) : 'U';
+
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Top Navigation Bar */}
-      <nav className="bg-white shadow-sm z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              {/* Mobile menu button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                <span className="sr-only">Toggle sidebar</span>
-              </Button>
-              
-              {/* Logo */}
-              <div className="flex-shrink-0 flex items-center">
-                <Link href="/patient">
-                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                    <span className="text-white font-bold">D</span>
-                  </div>
-                </Link>
-                <span className="ml-2 font-medium text-neutral-800 text-lg hidden sm:block">
-                  Delica Dental
+    <div className="min-h-screen flex flex-col bg-neutral-50">
+      {/* Header */}
+      <header className="bg-white border-b border-neutral-200 py-4 px-6 shadow-sm">
+        <div className="flex justify-between items-center max-w-7xl mx-auto">
+          <Link href="/patient">
+            <a>
+              <Logo size="small" />
+            </a>
+          </Link>
+          
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center space-x-8">
+            {navItems.map((item) => (
+              <Link key={item.href} href={item.href}>
+                <a 
+                  className={`text-sm ${
+                    location === item.href 
+                      ? 'text-primary-600 font-medium' 
+                      : 'text-neutral-700 hover:text-primary-600'
+                  }`}
+                >
+                  {item.label}
+                </a>
+              </Link>
+            ))}
+          </div>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 flex items-center gap-2">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={user?.profileImage} />
+                  <AvatarFallback className="bg-primary-100 text-primary-700">{userInitials}</AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium text-neutral-800 hidden md:block">
+                  {user?.fullName || 'Usuario'}
                 </span>
-              </div>
-            </div>
-            
-            {/* Right side navigation items */}
-            <div className="flex items-center">
-              {/* Notifications */}
-              <NotificationsDropdown />
-              
-              {/* Profile Dropdown */}
-              <ProfileDropdown user={user} />
-            </div>
-          </div>
+                <ChevronDown className="h-4 w-4 text-neutral-500" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link href="/patient/profile"><a className="cursor-pointer">Mi Perfil</a></Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/patient"><a className="cursor-pointer">Mi Tratamiento</a></Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                className="text-destructive focus:text-destructive cursor-pointer"
+                onClick={() => setLogoutDialogOpen(true)}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Cerrar Sesión
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </nav>
-
-      {/* Main Content Area with Sidebar */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar Navigation (Desktop) */}
-        <aside className="w-64 bg-white shadow-sm hidden md:block overflow-y-auto">
-          <div className="px-4 pt-6 pb-4">
-            {/* Patient Portal Title */}
-            <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">
-              Portal del Paciente
-            </h2>
-            
-            {/* Navigation Links */}
-            <nav className="space-y-1">
-              {navigationItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link key={item.href} href={item.href}>
-                    <a
-                      className={`flex items-center px-4 py-2 text-sm font-medium rounded-md group ${
-                        isActive(item.href)
-                          ? "text-primary bg-primary-50"
-                          : "text-neutral-600 hover:bg-neutral-50 hover:text-primary"
-                      }`}
-                    >
-                      <Icon
-                        className={`w-5 h-5 mr-3 ${
-                          isActive(item.href)
-                            ? "text-primary"
-                            : "text-neutral-400 group-hover:text-primary"
-                        }`}
-                      />
-                      <span>{item.label}</span>
-                    </a>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-        </aside>
-
-        {/* Mobile sidebar */}
-        {sidebarOpen && (
-          <div className="fixed inset-0 z-40 md:hidden">
-            <div className="fixed inset-0 bg-neutral-600 bg-opacity-75" onClick={() => setSidebarOpen(false)}></div>
-            <div className="fixed inset-y-0 left-0 flex flex-col w-64 max-w-xs bg-white shadow-lg">
-              <div className="px-4 pt-6 pb-4">
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center">
-                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">D</span>
-                    </div>
-                    <span className="ml-2 font-medium text-neutral-800">Delica Dental</span>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
-                    <X className="h-5 w-5" />
-                  </Button>
-                </div>
-                <nav className="space-y-1">
-                  {navigationItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <Link key={item.href} href={item.href}>
-                        <a
-                          className={`flex items-center px-4 py-2 text-sm font-medium rounded-md group ${
-                            isActive(item.href)
-                              ? "text-primary bg-primary-50"
-                              : "text-neutral-600 hover:bg-neutral-50 hover:text-primary"
-                          }`}
-                          onClick={() => setSidebarOpen(false)}
-                        >
-                          <Icon
-                            className={`w-5 h-5 mr-3 ${
-                              isActive(item.href)
-                                ? "text-primary"
-                                : "text-neutral-400 group-hover:text-primary"
-                            }`}
-                          />
-                          <span>{item.label}</span>
-                        </a>
-                      </Link>
-                    );
-                  })}
-                </nav>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto bg-neutral-50 p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">
-            {/* Page Header */}
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-neutral-800">{title}</h1>
-              <p className="text-neutral-500 mt-1">{subtitle}</p>
-            </div>
-            
-            {/* Page Content */}
-            {children}
-          </div>
-        </main>
+      </header>
+      
+      {/* Mobile Navigation */}
+      <div className="bg-white border-b border-neutral-200 shadow-sm md:hidden">
+        <div className="flex overflow-x-auto">
+          {navItems.map((item) => (
+            <Link key={item.href} href={item.href}>
+              <a 
+                className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${
+                  location === item.href
+                    ? 'text-primary-600 border-b-2 border-primary-500'
+                    : 'text-neutral-500'
+                }`}
+              >
+                {item.label}
+              </a>
+            </Link>
+          ))}
+        </div>
       </div>
+      
+      {/* Main Content */}
+      <main className="flex-1">
+        {children}
+      </main>
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <div className="p-4 text-center">
+            <h2 className="text-xl font-semibold mb-4">¿Cerrar sesión?</h2>
+            <p className="text-muted-foreground mb-6">¿Está seguro que desea cerrar su sesión?</p>
+            <div className="flex justify-center space-x-4">
+              <Button variant="outline" onClick={() => setLogoutDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleLogout}
+                disabled={logoutMutation.isPending}
+              >
+                {logoutMutation.isPending ? 'Cerrando sesión...' : 'Cerrar sesión'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
+};
+
+export default PatientLayout;

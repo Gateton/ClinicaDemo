@@ -1,567 +1,318 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
 import { storage } from "./storage";
-import { setupAuth } from "./auth";
-import { insertPatientSchema, insertTreatmentSchema, insertPatientTreatmentSchema, insertAppointmentSchema, insertImageSchema } from "@shared/schema";
-import { ZodError } from "zod";
-import { fromZodError } from "zod-validation-error";
+import { setupAuth, ensureAuthenticated, ensureRole } from "./auth";
+import multer from "multer";
+import { insertTreatmentSchema, insertAppointmentSchema, insertPatientTreatmentSchema, insertTreatmentStepSchema, insertTreatmentImageSchema } from "@shared/schema";
+import path from "path";
+import { mkdir } from "fs/promises";
 
-// Configure multer for file uploads
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const fileStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
-
-const upload = multer({ 
-  storage: fileStorage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
-  },
-  fileFilter: (req, file, cb) => {
-    // Accept only images
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'));
-    }
+// Setup multer for file uploads
+const createUploadsDir = async () => {
+  const dir = path.join(process.cwd(), 'uploads');
+  try {
+    await mkdir(dir, { recursive: true });
+    return dir;
+  } catch (err) {
+    console.error('Failed to create uploads directory:', err);
+    return dir;
   }
-});
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup auth routes
+  // Setup authentication
   setupAuth(app);
 
-  // Serve uploaded files
-  app.use('/uploads', (req, res, next) => {
-    // Only allow authenticated users to view uploaded files
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
+  // Setup file uploads
+  const uploadsDir = await createUploadsDir();
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, uploadsDir);
+    },
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const ext = path.extname(file.originalname);
+      cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
     }
-    next();
-  }, express.static(uploadDir));
-
-  // User routes
-  app.get("/api/users", async (req, res) => {
-    if (!req.isAuthenticated() || req.user.role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
+  });
+  
+  const upload = multer({ 
+    storage,
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (_req, file, cb) => {
+      // Accept only image files
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'));
+      }
     }
-    
-    const role = req.query.role as string | undefined;
-    const users = await storage.listUsers(role);
-    
-    // Remove passwords from response
-    const usersWithoutPasswords = users.map(({ password, ...user }) => user);
-    res.json(usersWithoutPasswords);
   });
 
   // Patient routes
-  app.get("/api/patients", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    if (req.user.role === "patient") {
-      const patient = await storage.getPatientByUserId(req.user.id);
-      return res.json(patient ? [patient] : []);
-    }
-    
-    const patients = await storage.listPatients();
-    res.json(patients);
-  });
-
-  app.get("/api/patients/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    const patientId = parseInt(req.params.id);
-    
-    // If patient, can only access own data
-    if (req.user.role === "patient") {
-      const patient = await storage.getPatientByUserId(req.user.id);
-      if (!patient || patient.id !== patientId) {
-        return res.status(403).json({ message: "Forbidden" });
-      }
-    }
-    
-    const patient = await storage.getPatient(patientId);
-    if (!patient) {
-      return res.status(404).json({ message: "Patient not found" });
-    }
-    
-    res.json(patient);
-  });
-
-  app.post("/api/patients", async (req, res) => {
-    if (!req.isAuthenticated() || req.user.role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    
+  app.get("/api/patients", ensureRole(['admin', 'staff']), async (_req, res) => {
     try {
-      const patientData = insertPatientSchema.parse(req.body);
-      const patient = await storage.createPatient(patientData);
-      res.status(201).json(patient);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
-      throw error;
+      const patients = await storage.getAllPatients();
+      res.json(patients);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch patients" });
     }
   });
 
-  app.put("/api/patients/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    const patientId = parseInt(req.params.id);
-    
-    // If patient, can only update own data
-    if (req.user.role === "patient") {
-      const patient = await storage.getPatientByUserId(req.user.id);
-      if (!patient || patient.id !== patientId) {
-        return res.status(403).json({ message: "Forbidden" });
-      }
-    }
-    
+  app.get("/api/patients/:id", ensureAuthenticated, async (req, res) => {
     try {
-      // Partial validation of patient data
-      const patientData = req.body;
-      const updatedPatient = await storage.updatePatient(patientId, patientData);
+      const id = parseInt(req.params.id);
+      const patient = await storage.getPatientById(id);
       
-      if (!updatedPatient) {
+      if (!patient) {
         return res.status(404).json({ message: "Patient not found" });
       }
-      
-      res.json(updatedPatient);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
+
+      // Check if the requester is the patient or staff/admin
+      if (req.user!.role === 'patient' && req.user!.id !== patient.userId) {
+        return res.status(403).json({ message: "Unauthorized access to patient data" });
       }
-      throw error;
+
+      res.json(patient);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch patient" });
+    }
+  });
+
+  // Staff routes
+  app.get("/api/staff", ensureRole(['admin']), async (_req, res) => {
+    try {
+      const staffMembers = await storage.getAllStaff();
+      res.json(staffMembers);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch staff" });
+    }
+  });
+
+  app.get("/api/staff/:id", ensureRole(['admin', 'staff']), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const staffMember = await storage.getStaffById(id);
+      
+      if (!staffMember) {
+        return res.status(404).json({ message: "Staff member not found" });
+      }
+      
+      res.json(staffMember);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch staff member" });
     }
   });
 
   // Treatment routes
-  app.get("/api/treatments", async (req, res) => {
-    const treatments = await storage.listTreatments();
-    res.json(treatments);
+  app.get("/api/treatments", ensureAuthenticated, async (_req, res) => {
+    try {
+      const treatments = await storage.getAllTreatments();
+      res.json(treatments);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch treatments" });
+    }
   });
 
-  app.post("/api/treatments", async (req, res) => {
-    if (!req.isAuthenticated() || req.user.role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    
+  app.post("/api/treatments", ensureRole(['admin']), async (req, res) => {
     try {
-      const treatmentData = insertTreatmentSchema.parse(req.body);
-      const treatment = await storage.createTreatment(treatmentData);
+      const result = insertTreatmentSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid treatment data", 
+          errors: result.error.errors 
+        });
+      }
+
+      const treatment = await storage.createTreatment(result.data);
       res.status(201).json(treatment);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
-      throw error;
+    } catch (err) {
+      res.status(500).json({ message: "Failed to create treatment" });
     }
   });
 
-  app.put("/api/treatments/:id", async (req, res) => {
-    if (!req.isAuthenticated() || req.user.role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    
-    const treatmentId = parseInt(req.params.id);
-    
+  // Patient Treatments routes
+  app.get("/api/patient-treatments/:patientId", ensureAuthenticated, async (req, res) => {
     try {
-      const treatmentData = req.body;
-      const updatedTreatment = await storage.updateTreatment(treatmentId, treatmentData);
+      const patientId = parseInt(req.params.patientId);
       
-      if (!updatedTreatment) {
-        return res.status(404).json({ message: "Treatment not found" });
+      // Check if the requester is the patient or staff/admin
+      if (req.user!.role === 'patient') {
+        const patient = await storage.getPatientByUserId(req.user!.id);
+        if (!patient || patient.id !== patientId) {
+          return res.status(403).json({ message: "Unauthorized access to treatment data" });
+        }
       }
-      
-      res.json(updatedTreatment);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
-      throw error;
+
+      const treatments = await storage.getPatientTreatments(patientId);
+      res.json(treatments);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch patient treatments" });
     }
   });
 
-  // Patient Treatment routes
-  app.get("/api/patient-treatments", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    const patientId = req.query.patientId ? parseInt(req.query.patientId as string) : undefined;
-    
-    // If patient, can only view own treatments
-    if (req.user.role === "patient") {
-      const patient = await storage.getPatientByUserId(req.user.id);
-      if (!patient) {
-        return res.json([]);
-      }
-      
-      const treatments = await storage.listPatientTreatments(patient.id);
-      return res.json(treatments);
-    }
-    
-    const treatments = await storage.listPatientTreatments(patientId);
-    res.json(treatments);
-  });
-
-  app.post("/api/patient-treatments", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "staff")) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    
+  app.post("/api/patient-treatments", ensureRole(['admin', 'staff']), async (req, res) => {
     try {
-      const treatmentData = insertPatientTreatmentSchema.parse(req.body);
-      const treatment = await storage.createPatientTreatment(treatmentData);
+      const result = insertPatientTreatmentSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid patient treatment data", 
+          errors: result.error.errors 
+        });
+      }
+
+      const treatment = await storage.createPatientTreatment(result.data);
       res.status(201).json(treatment);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
-      throw error;
+    } catch (err) {
+      res.status(500).json({ message: "Failed to create patient treatment" });
     }
   });
 
-  app.put("/api/patient-treatments/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "staff")) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    
-    const treatmentId = parseInt(req.params.id);
-    
+  app.post("/api/treatment-steps", ensureRole(['admin', 'staff']), async (req, res) => {
     try {
-      const treatmentData = req.body;
-      const updatedTreatment = await storage.updatePatientTreatment(treatmentId, treatmentData);
+      const result = insertTreatmentStepSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid treatment step data", 
+          errors: result.error.errors 
+        });
+      }
+
+      const step = await storage.createTreatmentStep(result.data);
+      res.status(201).json(step);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to create treatment step" });
+    }
+  });
+
+  app.patch("/api/treatment-steps/:id", ensureRole(['admin', 'staff']), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const step = await storage.updateTreatmentStepStatus(id, req.body.status);
       
-      if (!updatedTreatment) {
-        return res.status(404).json({ message: "Treatment not found" });
+      if (!step) {
+        return res.status(404).json({ message: "Treatment step not found" });
       }
       
-      res.json(updatedTreatment);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
-      throw error;
+      res.json(step);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update treatment step" });
     }
   });
 
   // Appointment routes
-  app.get("/api/appointments", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    const filters: {
-      patientId?: number,
-      staffId?: number,
-      date?: Date,
-      status?: string
-    } = {};
-    
-    if (req.query.patientId) {
-      filters.patientId = parseInt(req.query.patientId as string);
-    }
-    
-    if (req.query.staffId) {
-      filters.staffId = parseInt(req.query.staffId as string);
-    }
-    
-    if (req.query.date) {
-      filters.date = new Date(req.query.date as string);
-    }
-    
-    if (req.query.status) {
-      filters.status = req.query.status as string;
-    }
-    
-    // If patient, can only view own appointments
-    if (req.user.role === "patient") {
-      const patient = await storage.getPatientByUserId(req.user.id);
-      if (!patient) {
-        return res.json([]);
+  app.get("/api/appointments", ensureAuthenticated, async (req, res) => {
+    try {
+      // For patients, return only their appointments
+      if (req.user!.role === 'patient') {
+        const patient = await storage.getPatientByUserId(req.user!.id);
+        if (!patient) {
+          return res.status(404).json({ message: "Patient record not found" });
+        }
+        const appointments = await storage.getPatientAppointments(patient.id);
+        return res.json(appointments);
       }
       
-      filters.patientId = patient.id;
+      // For staff and admin, return all appointments
+      const appointments = await storage.getAllAppointments();
+      res.json(appointments);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch appointments" });
     }
-    
-    // If staff, can only view assigned appointments
-    if (req.user.role === "staff") {
-      filters.staffId = req.user.id;
-    }
-    
-    const appointments = await storage.listAppointments(filters);
-    res.json(appointments);
   });
 
-  app.post("/api/appointments", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    // Patients can only create appointments for themselves
-    if (req.user.role === "patient") {
-      const patient = await storage.getPatientByUserId(req.user.id);
-      if (!patient || patient.id !== req.body.patientId) {
-        return res.status(403).json({ message: "Forbidden" });
-      }
-    }
-    
+  app.post("/api/appointments", ensureRole(['admin', 'staff']), async (req, res) => {
     try {
-      const appointmentData = insertAppointmentSchema.parse(req.body);
-      const appointment = await storage.createAppointment(appointmentData);
+      const result = insertAppointmentSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid appointment data", 
+          errors: result.error.errors 
+        });
+      }
+
+      const appointment = await storage.createAppointment(result.data);
       res.status(201).json(appointment);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
-      throw error;
+    } catch (err) {
+      res.status(500).json({ message: "Failed to create appointment" });
     }
   });
 
-  app.put("/api/appointments/:id", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    const appointmentId = parseInt(req.params.id);
-    const appointment = await storage.getAppointment(appointmentId);
-    
-    if (!appointment) {
-      return res.status(404).json({ message: "Appointment not found" });
-    }
-    
-    // Patients can only update certain fields of their own appointments
-    if (req.user.role === "patient") {
-      const patient = await storage.getPatientByUserId(req.user.id);
-      if (!patient || patient.id !== appointment.patientId) {
-        return res.status(403).json({ message: "Forbidden" });
+  app.patch("/api/appointments/:id/status", ensureRole(['admin', 'staff']), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const appointment = await storage.updateAppointmentStatus(id, req.body.status);
+      
+      if (!appointment) {
+        return res.status(404).json({ message: "Appointment not found" });
       }
       
-      // Patients can only cancel appointments
-      if (req.body.status && req.body.status !== "cancelled") {
-        return res.status(403).json({ message: "Patients can only cancel appointments" });
-      }
-    }
-    
-    try {
-      const appointmentData = req.body;
-      const updatedAppointment = await storage.updateAppointment(appointmentId, appointmentData);
-      res.json(updatedAppointment);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
-      throw error;
+      res.json(appointment);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update appointment status" });
     }
   });
 
-  // Image routes
-  app.get("/api/images", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    const filters: {
-      patientId?: number,
-      treatmentId?: number,
-      category?: string,
-      isVisible?: boolean
-    } = {};
-    
-    if (req.query.patientId) {
-      filters.patientId = parseInt(req.query.patientId as string);
-    }
-    
-    if (req.query.treatmentId) {
-      filters.treatmentId = parseInt(req.query.treatmentId as string);
-    }
-    
-    if (req.query.category) {
-      filters.category = req.query.category as string;
-    }
-    
-    // Patients can only see visible images
-    if (req.user.role === "patient") {
-      const patient = await storage.getPatientByUserId(req.user.id);
-      if (!patient) {
-        return res.json([]);
-      }
-      
-      filters.patientId = patient.id;
-      filters.isVisible = true;
-    }
-    
-    const images = await storage.listImages(filters);
-    res.json(images);
-  });
-
-  app.post("/api/images", upload.single('image'), async (req, res) => {
-    if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "staff")) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    
-    if (!req.file) {
-      return res.status(400).json({ message: "No image file uploaded" });
-    }
-    
+  // Treatment Images routes
+  app.post("/api/images", ensureRole(['admin', 'staff']), upload.single('image'), async (req, res) => {
     try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No image file provided" });
+      }
+
       const imageData = {
-        ...req.body,
-        patientId: parseInt(req.body.patientId),
-        treatmentId: req.body.treatmentId ? parseInt(req.body.treatmentId) : undefined,
+        patientTreatmentId: parseInt(req.body.patientTreatmentId),
         filename: req.file.filename,
-        originalName: req.file.originalname,
-        type: req.file.mimetype,
-        uploadedById: req.user.id,
-        isVisible: req.body.isVisible === 'true'
+        title: req.body.title,
+        type: req.body.type || 'progress',
+        uploadedBy: req.user!.id
       };
-      
-      const validatedData = insertImageSchema.parse(imageData);
-      const image = await storage.createImage(validatedData);
+
+      const result = insertTreatmentImageSchema.safeParse(imageData);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Invalid image data", 
+          errors: result.error.errors 
+        });
+      }
+
+      const image = await storage.saveTreatmentImage(result.data);
       res.status(201).json(image);
-    } catch (error) {
-      // Delete uploaded file if validation fails
-      if (req.file) {
-        fs.unlinkSync(req.file.path);
-      }
-      
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
-      throw error;
+    } catch (err) {
+      res.status(500).json({ message: "Failed to upload image" });
     }
   });
 
-  app.put("/api/images/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "staff")) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    
-    const imageId = parseInt(req.params.id);
-    
+  app.get("/api/images/treatment/:treatmentId", ensureAuthenticated, async (req, res) => {
     try {
-      const imageData = req.body;
+      const treatmentId = parseInt(req.params.treatmentId);
       
-      // Convert boolean string to actual boolean
-      if (imageData.isVisible !== undefined) {
-        imageData.isVisible = imageData.isVisible === 'true' || imageData.isVisible === true;
+      // Check if the requester is the patient or staff/admin
+      if (req.user!.role === 'patient') {
+        const treatment = await storage.getPatientTreatmentById(treatmentId);
+        if (!treatment) {
+          return res.status(404).json({ message: "Treatment not found" });
+        }
+        
+        const patient = await storage.getPatientByUserId(req.user!.id);
+        if (!patient || patient.id !== treatment.patientId) {
+          return res.status(403).json({ message: "Unauthorized access to image data" });
+        }
       }
-      
-      const updatedImage = await storage.updateImage(imageId, imageData);
-      
-      if (!updatedImage) {
-        return res.status(404).json({ message: "Image not found" });
-      }
-      
-      res.json(updatedImage);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
-      throw error;
+
+      const images = await storage.getTreatmentImages(treatmentId);
+      res.json(images);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch treatment images" });
     }
   });
 
-  app.delete("/api/images/:id", async (req, res) => {
-    if (!req.isAuthenticated() || (req.user.role !== "admin" && req.user.role !== "staff")) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    
-    const imageId = parseInt(req.params.id);
-    const image = await storage.getImage(imageId);
-    
-    if (!image) {
-      return res.status(404).json({ message: "Image not found" });
-    }
-    
-    // Delete image file
-    const imagePath = path.join(uploadDir, image.filename);
-    if (fs.existsSync(imagePath)) {
-      fs.unlinkSync(imagePath);
-    }
-    
-    const deleted = await storage.deleteImage(imageId);
-    res.status(deleted ? 200 : 404).json({ success: deleted });
-  });
-
-  // Stats routes (for dashboard)
-  app.get("/api/stats", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    // For patients, return their stats
-    if (req.user.role === "patient") {
-      const patient = await storage.getPatientByUserId(req.user.id);
-      
-      if (!patient) {
-        return res.status(404).json({ message: "Patient profile not found" });
-      }
-      
-      const patientTreatments = await storage.listPatientTreatments(patient.id);
-      const appointments = await storage.listAppointments({ patientId: patient.id });
-      const images = await storage.listImages({ patientId: patient.id, isVisible: true });
-      
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const upcomingAppointments = appointments.filter(a => {
-        const appointmentDate = new Date(a.date);
-        return appointmentDate >= today && a.status !== "cancelled";
-      });
-      
-      return res.json({
-        treatments: patientTreatments.length,
-        activeTreatments: patientTreatments.filter(t => t.status === "active").length,
-        upcomingAppointments: upcomingAppointments.length,
-        totalAppointments: appointments.length,
-        images: images.length
-      });
-    }
-    
-    // For admin and staff, return overall stats
-    const patients = await storage.listPatients();
-    const patientTreatments = await storage.listPatientTreatments();
-    const appointments = await storage.listAppointments();
-    const images = await storage.listImages();
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const todayAppointments = appointments.filter(a => {
-      const appointmentDate = new Date(a.date);
-      return appointmentDate.getDate() === today.getDate() &&
-             appointmentDate.getMonth() === today.getMonth() &&
-             appointmentDate.getFullYear() === today.getFullYear();
-    });
-    
-    return res.json({
-      patientCount: patients.length,
-      todayAppointments: todayAppointments.length,
-      activeTreatments: patientTreatments.filter(t => t.status === "active").length,
-      storedImages: images.length
-    });
+  // Serve uploaded images
+  app.get("/api/uploads/:filename", ensureAuthenticated, (req, res) => {
+    const filename = req.params.filename;
+    res.sendFile(path.join(uploadsDir, filename));
   });
 
   const httpServer = createServer(app);

@@ -2,15 +2,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect, Route } from "wouter";
 
+type ProtectedRouteProps = {
+  path: string;
+  component: () => React.JSX.Element;
+  allowedRoles?: string[];
+};
+
 export function ProtectedRoute({
   path,
   component: Component,
-  adminOnly = false,
-}: {
-  path: string;
-  component: () => React.JSX.Element;
-  adminOnly?: boolean;
-}) {
+  allowedRoles,
+}: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -30,11 +32,16 @@ export function ProtectedRoute({
       </Route>
     );
   }
-  
-  if (adminOnly && user.role !== "admin" && user.role !== "staff") {
+
+  // If roles are specified, check if user has the required role
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
     return (
       <Route path={path}>
-        <Redirect to="/" />
+        {user.role === 'patient' ? (
+          <Redirect to="/patient" />
+        ) : (
+          <Redirect to="/admin" />
+        )}
       </Route>
     );
   }

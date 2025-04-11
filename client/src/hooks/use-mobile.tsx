@@ -17,3 +17,7 @@ export function useIsMobile() {
 
   return !!isMobile
 }
+
+// Export default for compatibility
+export const useMobile = useIsMobile;
+export default useIsMobile;

@@ -1,346 +1,380 @@
 import { useState } from "react";
-import { AdminLayout } from "@/components/layout/admin-layout";
-import { useQuery } from "@tanstack/react-query";
+import AdminLayout from "@/components/layout/admin-layout";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { 
+  Plus, 
+  Search, 
+  MoreVertical,
+  Edit,
+  Trash2,
+  FileText,
+  Clock
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { TreatmentForm } from "@/components/treatments/treatment-form";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format, parseISO } from "date-fns";
-import { es } from "date-fns/locale";
-import { Plus, Search, Pencil } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import TreatmentForm from "@/components/admin/treatment-form";
 
 interface Treatment {
   id: number;
-  patientId: number;
-  patientName: string;
-  patientInitials: string;
   name: string;
-  type: string;
-  description?: string;
-  status: 'active' | 'completed' | 'cancelled' | 'pending';
+  description: string;
+  defaultDuration: number;
+  createdAt: string;
+}
+
+interface PatientTreatment {
+  id: number;
+  patientId: number;
+  treatmentId: number;
+  patientName: string;
+  treatmentName: string;
+  staffName: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   progress: number;
   startDate: string;
   endDate?: string;
-  notes?: string;
-  assignedToName?: string;
-  nextAppointment?: string;
 }
 
-export default function AdminTreatments() {
+const AdminTreatments = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [filter, setFilter] = useState<'active' | 'completed' | 'all'>('active');
-  const [isNewTreatmentDialogOpen, setIsNewTreatmentDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedTreatment, setSelectedTreatment] = useState<Treatment | null>(null);
+  const { toast } = useToast();
+  
+  // Fetch treatments data
+  const { 
+    data: treatments, 
+    isLoading: isLoadingTreatments,
+    error: treatmentsError
+  } = useQuery<Treatment[]>({
+    queryKey: ['/api/treatments'],
+  });
 
-  const { data: treatments, isLoading } = useQuery<Treatment[]>({
-    queryKey: ['/api/treatments', filter, searchTerm],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      params.append('filter', filter);
-      if (searchTerm) params.append('search', searchTerm);
-      
-      const res = await fetch(`/api/treatments?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to fetch treatments');
-      return res.json();
+  // Fetch patient treatments data
+  const { 
+    data: patientTreatments, 
+    isLoading: isLoadingPatientTreatments,
+    error: patientTreatmentsError
+  } = useQuery<PatientTreatment[]>({
+    queryKey: ['/api/patient-treatments'],
+  });
+
+  // Delete treatment mutation
+  const deleteTreatmentMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/treatments/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/treatments'] });
+      toast({
+        title: "Tratamiento eliminado",
+        description: "El tratamiento ha sido eliminado exitosamente",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error al eliminar el tratamiento",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
-  const handleSearch = (event: React.FormEvent) => {
-    event.preventDefault();
-    // The search is already handled by the dependency in the useQuery hook
+  // Filter treatments based on search term
+  const filteredTreatments = treatments?.filter(treatment => 
+    treatment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    treatment.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Helper to get the count of patients using a treatment
+  const getPatientCountForTreatment = (treatmentId: number) => {
+    return patientTreatments?.filter(pt => pt.treatmentId === treatmentId).length || 0;
   };
 
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return 'No definida';
-    try {
-      const date = parseISO(dateString);
-      return format(date, "dd MMM yyyy", { locale: es });
-    } catch {
-      return 'Fecha no disponible';
-    }
-  };
-
-  const getStatusBadge = (status: Treatment['status']) => {
-    switch (status) {
-      case 'active':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">En progreso</Badge>;
-      case 'completed':
-        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Completado</Badge>;
-      case 'cancelled':
-        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Cancelado</Badge>;
-      default:
-        return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Pendiente</Badge>;
-    }
-  };
-
-  const handleViewTreatment = (treatment: Treatment) => {
-    setSelectedTreatment(treatment);
-  };
-
-  const handleEditTreatment = () => {
-    if (selectedTreatment) {
-      // Handle edit treatment logic
-      setSelectedTreatment(null);
-    }
+  // Helper function to get active treatments count
+  const getActiveTreatmentsCount = (treatmentId: number) => {
+    return patientTreatments?.filter(
+      pt => pt.treatmentId === treatmentId && 
+      (pt.status === 'pending' || pt.status === 'in_progress')
+    ).length || 0;
   };
 
   return (
-    <AdminLayout title="Tratamientos" subtitle="Gestiona los tratamientos de tus pacientes.">
-      {/* Filter and actions bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div className="w-full space-y-4 sm:space-y-0 sm:flex sm:items-center sm:space-x-4">
-          <Tabs 
-            value={filter} 
-            onValueChange={(value) => setFilter(value as 'active' | 'completed' | 'all')}
-            className="w-full sm:w-auto"
-          >
-            <TabsList>
-              <TabsTrigger value="active">Activos</TabsTrigger>
-              <TabsTrigger value="completed">Completados</TabsTrigger>
-              <TabsTrigger value="all">Todos</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          
-          <form onSubmit={handleSearch} className="w-full sm:w-auto flex-grow max-w-xs">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-neutral-400" />
-              <Input
-                type="search"
-                placeholder="Buscar tratamientos..."
-                className="pl-9"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </form>
+    <AdminLayout>
+      <div className="p-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-neutral-900">Tratamientos</h1>
+            <p className="text-neutral-600">Gestiona los tratamientos ofrecidos por la clínica</p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-primary-500 hover:bg-primary-600">
+                  <Plus className="h-4 w-4 mr-1" />
+                  <span>Nuevo Tratamiento</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Añadir Nuevo Tratamiento</DialogTitle>
+                  <DialogDescription>
+                    Introduce los datos del nuevo tratamiento en el formulario a continuación.
+                  </DialogDescription>
+                </DialogHeader>
+                <TreatmentForm 
+                  onSuccess={() => setIsCreateDialogOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
-        <Button onClick={() => setIsNewTreatmentDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Nuevo Tratamiento
-        </Button>
-      </div>
-
-      {/* Treatments list */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-6 divide-y divide-neutral-200">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="py-4 first:pt-0 last:pb-0">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <div className="ml-4">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-24 mt-1" />
-                      </div>
-                    </div>
-                    <div>
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-2 w-36 mt-1" />
-                    </div>
-                  </div>
-                </div>
-              ))}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle>Catálogo de Tratamientos</CardTitle>
+            <CardDescription>
+              {filteredTreatments ? `${filteredTreatments.length} tratamientos en total` : 'Cargando...'}
+            </CardDescription>
+            <div className="flex flex-col sm:flex-row gap-3 mt-4">
+              <div className="relative flex-1">
+                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar tratamiento..."
+                  className="pl-9"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </div>
-          ) : treatments && treatments.length > 0 ? (
-            <div className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full divide-y divide-neutral-200">
-                  <thead className="bg-neutral-50">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                        Paciente
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                        Tratamiento
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                        Progreso
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                        Estado
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                        Fechas
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                        Acciones
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-neutral-200">
-                    {treatments.map((treatment) => (
-                      <tr key={treatment.id} className="hover:bg-neutral-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-sm font-medium text-primary-700">
-                              {treatment.patientInitials}
-                            </div>
-                            <div className="ml-3">
-                              <div className="text-sm font-medium text-neutral-900">{treatment.patientName}</div>
-                            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoadingTreatments || isLoadingPatientTreatments ? (
+              <div className="relative w-full overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tratamiento</TableHead>
+                      <TableHead>Duración</TableHead>
+                      <TableHead>Pacientes Activos</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Array(5).fill(0).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell>
+                          <div>
+                            <Skeleton className="h-5 w-32 mb-1" />
+                            <Skeleton className="h-4 w-48" />
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-neutral-900">{treatment.name}</div>
-                          <div className="text-xs text-neutral-500">{treatment.type}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap w-48">
-                          <Progress value={treatment.progress} className="h-2" />
-                          <div className="text-xs text-neutral-500 mt-1">
-                            {treatment.progress}%
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {getStatusBadge(treatment.status)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-neutral-900">
-                            <div className="flex flex-col space-y-1">
-                              <span><span className="text-xs text-neutral-500">Inicio:</span> {formatDate(treatment.startDate)}</span>
-                              <span><span className="text-xs text-neutral-500">Fin:</span> {formatDate(treatment.endDate)}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewTreatment(treatment)}
-                          >
-                            Ver
-                          </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-16" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-4 w-8" />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton className="h-6 w-20 rounded-full" />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Skeleton className="h-8 w-8 rounded-full inline-block" />
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
-            </div>
-          ) : (
-            <div className="py-12 text-center">
-              <p className="text-neutral-500">No se encontraron tratamientos para el filtro seleccionado.</p>
-              <Button 
-                variant="outline" 
-                className="mt-4"
-                onClick={() => setIsNewTreatmentDialogOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" /> Crear nuevo tratamiento
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            ) : treatmentsError || patientTreatmentsError ? (
+              <div className="p-8 text-center">
+                <p className="text-red-500">Error al cargar datos: {(treatmentsError as Error)?.message || (patientTreatmentsError as Error)?.message}</p>
+                <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+                  Reintentar
+                </Button>
+              </div>
+            ) : filteredTreatments && filteredTreatments.length > 0 ? (
+              <div className="relative w-full overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tratamiento</TableHead>
+                      <TableHead>Duración</TableHead>
+                      <TableHead>Pacientes Activos</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTreatments.map((treatment) => {
+                      const patientCount = getPatientCountForTreatment(treatment.id);
+                      const activeTreatmentsCount = getActiveTreatmentsCount(treatment.id);
+                      return (
+                        <TableRow key={treatment.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{treatment.name}</div>
+                              <div className="text-sm text-muted-foreground line-clamp-1">
+                                {treatment.description}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center">
+                              <Clock className="h-4 w-4 mr-1 text-muted-foreground" />
+                              <span>{treatment.defaultDuration} min</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{patientCount}</span>
+                                    {activeTreatmentsCount > 0 && (
+                                      <Badge variant="outline" className="bg-primary-100 text-primary-800 border-primary-200">
+                                        {activeTreatmentsCount} activos
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Total: {patientCount} pacientes</p>
+                                  <p>Activos: {activeTreatmentsCount} pacientes</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-100">
+                              Activo
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreVertical className="h-4 w-4" />
+                                  <span className="sr-only">Acciones</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    setSelectedTreatment(treatment);
+                                    setIsEditDialogOpen(true);
+                                  }}
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  <span>Editar</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem>
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  <span>Ver detalles</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => {
+                                    if (patientCount > 0) {
+                                      toast({
+                                        title: "No se puede eliminar",
+                                        description: "Este tratamiento está asociado a pacientes",
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+                                    if (confirm("¿Estás seguro de que deseas eliminar este tratamiento?")) {
+                                      deleteTreatmentMutation.mutate(treatment.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  <span>Eliminar</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="p-8 text-center">
+                <p className="text-muted-foreground">No hay tratamientos que coincidan con tu búsqueda.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* New Treatment Dialog */}
-      <Dialog open={isNewTreatmentDialogOpen} onOpenChange={setIsNewTreatmentDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Crear Nuevo Tratamiento</DialogTitle>
-          </DialogHeader>
-          <TreatmentForm onSuccess={() => setIsNewTreatmentDialogOpen(false)} />
-        </DialogContent>
-      </Dialog>
-
-      {/* View/Edit Treatment Dialog */}
-      {selectedTreatment && (
-        <Dialog open={!!selectedTreatment} onOpenChange={(open) => !open && setSelectedTreatment(null)}>
-          <DialogContent className="sm:max-w-[600px]">
+        {/* Edit Treatment Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Detalles del Tratamiento</DialogTitle>
+              <DialogTitle>Editar Tratamiento</DialogTitle>
+              <DialogDescription>
+                Modifica los datos del tratamiento en el formulario a continuación.
+              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="h-12 w-12 rounded-full bg-primary-100 flex items-center justify-center text-lg font-medium text-primary-700">
-                    {selectedTreatment.patientInitials}
-                  </div>
-                  <div className="ml-4">
-                    <h3 className="text-lg font-medium text-neutral-900">{selectedTreatment.patientName}</h3>
-                    <div className="mt-1">
-                      {getStatusBadge(selectedTreatment.status)}
-                    </div>
-                  </div>
-                </div>
-                <Button variant="outline" size="sm" onClick={handleEditTreatment}>
-                  <Pencil className="h-4 w-4 mr-1" /> Editar
-                </Button>
-              </div>
-              
-              <div className="bg-neutral-50 p-4 rounded-lg">
-                <h4 className="text-sm font-medium text-neutral-800 mb-2">Información del Tratamiento</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-neutral-500">Nombre</p>
-                    <p className="text-sm font-medium text-neutral-900">{selectedTreatment.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-neutral-500">Tipo</p>
-                    <p className="text-sm font-medium text-neutral-900">{selectedTreatment.type}</p>
-                  </div>
-                </div>
-                
-                {selectedTreatment.description && (
-                  <div className="mt-3">
-                    <p className="text-xs text-neutral-500">Descripción</p>
-                    <p className="text-sm text-neutral-900 mt-1">{selectedTreatment.description}</p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="bg-neutral-50 p-4 rounded-lg">
-                <h4 className="text-sm font-medium text-neutral-800 mb-2">Progreso y Fechas</h4>
-                <Progress value={selectedTreatment.progress} className="h-2 mb-1" />
-                <p className="text-sm text-neutral-900 mb-3">{selectedTreatment.progress}% Completado</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-neutral-500">Fecha de inicio</p>
-                    <p className="text-sm font-medium text-neutral-900">{formatDate(selectedTreatment.startDate)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-neutral-500">Fecha de finalización</p>
-                    <p className="text-sm font-medium text-neutral-900">{formatDate(selectedTreatment.endDate)}</p>
-                  </div>
-                </div>
-              </div>
-              
-              {selectedTreatment.assignedToName && (
-                <div className="bg-neutral-50 p-4 rounded-lg">
-                  <p className="text-xs text-neutral-500">Asignado a</p>
-                  <p className="text-sm font-medium text-neutral-900">{selectedTreatment.assignedToName}</p>
-                </div>
-              )}
-              
-              {selectedTreatment.nextAppointment && (
-                <div className="bg-neutral-50 p-4 rounded-lg">
-                  <p className="text-xs text-neutral-500">Próxima cita</p>
-                  <p className="text-sm font-medium text-neutral-900">{selectedTreatment.nextAppointment}</p>
-                </div>
-              )}
-              
-              {selectedTreatment.notes && (
-                <div className="bg-neutral-50 p-4 rounded-lg">
-                  <p className="text-xs text-neutral-500">Notas</p>
-                  <p className="text-sm text-neutral-900 mt-1">{selectedTreatment.notes}</p>
-                </div>
-              )}
-              
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setSelectedTreatment(null)}>
-                  Cerrar
-                </Button>
-              </div>
-            </div>
+            {selectedTreatment && (
+              <TreatmentForm 
+                treatment={selectedTreatment}
+                onSuccess={() => {
+                  setIsEditDialogOpen(false);
+                  setSelectedTreatment(null);
+                }}
+              />
+            )}
           </DialogContent>
         </Dialog>
-      )}
+      </div>
     </AdminLayout>
   );
-}
+};
+
+export default AdminTreatments;

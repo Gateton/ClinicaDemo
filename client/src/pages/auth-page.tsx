@@ -1,46 +1,75 @@
-import { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { Redirect } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { insertUserSchema } from "@shared/schema";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Logo from "@/components/ui/logo";
 import { Loader2 } from "lucide-react";
 
+// Login form schema
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
+  username: z.string().min(1, "El nombre de usuario es requerido"),
+  password: z.string().min(1, "La contraseña es requerida"),
 });
 
-const registerSchema = insertUserSchema.extend({
-  confirmPassword: z.string().min(1, "Please confirm your password"),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
+// Registration form schema
+const registerPatientSchema = z.object({
+  user: z.object({
+    username: z.string().min(3, "El nombre de usuario debe tener al menos 3 caracteres"),
+    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+    email: z.string().email("Debe ingresar un correo electrónico válido"),
+    fullName: z.string().min(1, "El nombre completo es requerido"),
+    role: z.literal('patient'),
+    phone: z.string().optional(),
+  }),
+  profile: z.object({
+    dateOfBirth: z.string().optional(),
+    gender: z.string().optional(),
+    address: z.string().optional(),
+    insurance: z.string().optional(),
+    occupation: z.string().optional(),
+    allergies: z.array(z.string()).optional(),
+    medicalConditions: z.array(z.string()).optional(),
+    currentMedication: z.string().optional(),
+    medicalNotes: z.string().optional(),
+  }),
 });
 
-type LoginFormValues = z.infer<typeof loginSchema>;
-type RegisterFormValues = z.infer<typeof registerSchema>;
+const registerStaffSchema = z.object({
+  user: z.object({
+    username: z.string().min(3, "El nombre de usuario debe tener al menos 3 caracteres"),
+    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+    email: z.string().email("Debe ingresar un correo electrónico válido"),
+    fullName: z.string().min(1, "El nombre completo es requerido"),
+    role: z.string().min(1, "El rol es requerido"),
+    phone: z.string().optional(),
+  }),
+  profile: z.object({
+    position: z.string().min(1, "La posición es requerida"),
+    specialty: z.string().optional(),
+    licenseNumber: z.string().optional(),
+  }),
+});
 
 export default function AuthPage() {
-  const [activeTab, setActiveTab] = useState<string>("login");
-  const [location, navigate] = useLocation();
   const { user, loginMutation, registerMutation } = useAuth();
+  const [authMode, setAuthMode] = useState<'patient' | 'staff'>('patient');
+  const [activeTab, setActiveTab] = useState<string>("login");
+  
+  // If user is already logged in, redirect to appropriate dashboard
+  if (user) {
+    return user.role === 'patient' ? <Redirect to="/patient" /> : <Redirect to="/admin" />;
+  }
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
-      const redirectPath = user.role === 'admin' ? '/' : '/patient';
-      navigate(redirectPath);
-    }
-  }, [user, navigate]);
-
-  const loginForm = useForm<LoginFormValues>({
+  // Setup login form
+  const loginForm = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       username: "",
@@ -48,247 +77,438 @@ export default function AuthPage() {
     },
   });
 
-  const registerForm = useForm<RegisterFormValues>({
-    resolver: zodResolver(registerSchema),
+  // Setup registration form for patients
+  const registerPatientForm = useForm({
+    resolver: zodResolver(registerPatientSchema),
     defaultValues: {
-      username: "",
-      password: "",
-      confirmPassword: "",
-      fullName: "",
-      email: "",
-      role: "patient", // Default role
-      phone: "",
-      address: "",
-      dateOfBirth: "",
+      user: {
+        username: "",
+        password: "",
+        email: "",
+        fullName: "",
+        role: "patient",
+        phone: "",
+      },
+      profile: {
+        dateOfBirth: "",
+        gender: "",
+        address: "",
+        insurance: "",
+        occupation: "",
+        allergies: [],
+        medicalConditions: [],
+        currentMedication: "",
+        medicalNotes: "",
+      },
     },
   });
 
-  const onLoginSubmit = (data: LoginFormValues) => {
+  // Setup registration form for staff
+  const registerStaffForm = useForm({
+    resolver: zodResolver(registerStaffSchema),
+    defaultValues: {
+      user: {
+        username: "",
+        password: "",
+        email: "",
+        fullName: "",
+        role: "staff",
+        phone: "",
+      },
+      profile: {
+        position: "",
+        specialty: "",
+        licenseNumber: "",
+      },
+    },
+  });
+
+  // Handle login form submission
+  const onLoginSubmit = (data: z.infer<typeof loginSchema>) => {
     loginMutation.mutate(data);
   };
 
-  const onRegisterSubmit = (data: RegisterFormValues) => {
-    // Remove confirmPassword as it's not in the schema
-    const { confirmPassword, ...registerData } = data;
-    registerMutation.mutate(registerData);
+  // Handle patient registration form submission
+  const onRegisterPatientSubmit = (data: z.infer<typeof registerPatientSchema>) => {
+    registerMutation.mutate(data);
   };
 
-  if (user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  // Handle staff registration form submission
+  const onRegisterStaffSubmit = (data: z.infer<typeof registerStaffSchema>) => {
+    registerMutation.mutate(data);
+  };
 
   return (
-    <div className="flex min-h-screen bg-neutral-50">
-      <div className="flex flex-col justify-center items-center w-full lg:w-1/2 p-8">
-        <div className="flex items-center mb-8">
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-white font-bold">D</span>
+    <div className="min-h-screen flex items-center justify-center bg-primary-50 p-4">
+      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Information Section */}
+        <div className="hidden lg:flex flex-col justify-center p-8 bg-primary-600 text-white rounded-l-lg">
+          <Logo size="large" className="text-white mb-8" />
+          <h1 className="text-3xl font-bold mb-4">Bienvenido a Clínica Odontológica Delica</h1>
+          <p className="text-lg mb-6">
+            Nuestro sistema de gestión le permite acceder a sus tratamientos, citas y
+            visualizar el progreso de su sonrisa.
+          </p>
+          <div className="space-y-4">
+            <div className="flex items-start">
+              <div className="bg-white p-1 rounded-full text-primary-600 mr-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold">Seguimiento de tratamientos</h3>
+                <p className="text-primary-100">Visualice el progreso de sus tratamientos dentales.</p>
+              </div>
+            </div>
+            <div className="flex items-start">
+              <div className="bg-white p-1 rounded-full text-primary-600 mr-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold">Gestión de citas</h3>
+                <p className="text-primary-100">Programe y administre sus citas fácilmente.</p>
+              </div>
+            </div>
+            <div className="flex items-start">
+              <div className="bg-white p-1 rounded-full text-primary-600 mr-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold">Galería de imágenes</h3>
+                <p className="text-primary-100">Compare el antes y después de sus tratamientos.</p>
+              </div>
+            </div>
           </div>
-          <span className="ml-2 font-semibold text-neutral-800 text-lg">Delica Dental</span>
         </div>
 
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold text-center">Welcome to Delica Dental</CardTitle>
-            <CardDescription className="text-center">
-              Sign in to access your account or register if you're a new patient
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        {/* Auth Form Section */}
+        <Card className="w-full shadow-lg border-0">
+          <CardContent className="p-8">
+            <div className="lg:hidden mb-8">
+              <Logo size="large" className="mx-auto" />
+            </div>
+            
             <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2 mb-4">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
+              <TabsList className="grid grid-cols-2 mb-8 w-full">
+                <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
+                <TabsTrigger value="register">Registrarse</TabsTrigger>
               </TabsList>
               
+              {/* Login Form */}
               <TabsContent value="login">
-                <Form {...loginForm}>
-                  <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
-                    <FormField
-                      control={loginForm.control}
-                      name="username"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Username</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter your username" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={loginForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Password</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="Enter your password" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={loginMutation.isPending}
-                    >
-                      {loginMutation.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Sign In
-                    </Button>
-                  </form>
-                </Form>
-              </TabsContent>
-              
-              <TabsContent value="register">
-                <Form {...registerForm}>
-                  <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
-                    <FormField
-                      control={registerForm.control}
-                      name="fullName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Full Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter your full name" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <h2 className="text-2xl font-bold">Iniciar Sesión</h2>
+                    <p className="text-muted-foreground mt-2">Acceda a su cuenta para gestionar sus servicios</p>
+                  </div>
+                  
+                  <Form {...loginForm}>
+                    <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
                       <FormField
-                        control={registerForm.control}
+                        control={loginForm.control}
                         name="username"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Username</FormLabel>
+                            <FormLabel>Nombre de usuario</FormLabel>
                             <FormControl>
-                              <Input placeholder="Choose a username" {...field} />
+                              <Input placeholder="Ingrese su nombre de usuario" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                       <FormField
-                        control={registerForm.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Email</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Your email address" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={registerForm.control}
+                        control={loginForm.control}
                         name="password"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Password</FormLabel>
+                            <FormLabel>Contraseña</FormLabel>
                             <FormControl>
-                              <Input type="password" placeholder="Create password" {...field} />
+                              <Input type="password" placeholder="Ingrese su contraseña" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      <FormField
-                        control={registerForm.control}
-                        name="confirmPassword"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Confirm Password</FormLabel>
-                            <FormControl>
-                              <Input type="password" placeholder="Confirm password" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
+                      <div className="text-right">
+                        <Button variant="link" className="p-0 h-auto">¿Olvidó su contraseña?</Button>
+                      </div>
+                      <Button 
+                        type="submit" 
+                        className="w-full" 
+                        disabled={loginMutation.isPending}
+                      >
+                        {loginMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Iniciando sesión...
+                          </>
+                        ) : (
+                          "Iniciar Sesión"
                         )}
-                      />
-                    </div>
-                    <FormField
-                      control={registerForm.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Phone Number</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Your phone number" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                      </Button>
+                    </form>
+                  </Form>
+                  
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      ¿No tiene una cuenta?{" "}
+                      <Button variant="link" className="p-0 h-auto" onClick={() => setActiveTab("register")}>
+                        Crear cuenta
+                      </Button>
+                    </p>
+                  </div>
+                </div>
+              </TabsContent>
+              
+              {/* Register Form */}
+              <TabsContent value="register">
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <h2 className="text-2xl font-bold">Crear Cuenta</h2>
+                    <p className="text-muted-foreground mt-2">Complete la información para registrarse</p>
+                  </div>
+                  
+                  <div className="flex justify-center space-x-4 mb-6">
                     <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={registerMutation.isPending}
+                      type="button" 
+                      variant={authMode === 'patient' ? 'default' : 'outline'} 
+                      onClick={() => setAuthMode('patient')}
                     >
-                      {registerMutation.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Create Account
+                      Paciente
                     </Button>
-                  </form>
-                </Form>
+                    <Button 
+                      type="button" 
+                      variant={authMode === 'staff' ? 'default' : 'outline'} 
+                      onClick={() => setAuthMode('staff')}
+                    >
+                      Personal
+                    </Button>
+                  </div>
+                  
+                  {authMode === 'patient' ? (
+                    <Form {...registerPatientForm}>
+                      <form onSubmit={registerPatientForm.handleSubmit(onRegisterPatientSubmit)} className="space-y-4">
+                        <FormField
+                          control={registerPatientForm.control}
+                          name="user.fullName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Nombre completo</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Ingrese su nombre completo" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={registerPatientForm.control}
+                            name="user.email"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Correo electrónico</FormLabel>
+                                <FormControl>
+                                  <Input type="email" placeholder="correo@ejemplo.com" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={registerPatientForm.control}
+                            name="user.phone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Teléfono</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="+34 600 000 000" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <FormField
+                          control={registerPatientForm.control}
+                          name="user.username"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Nombre de usuario</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Elija un nombre de usuario" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={registerPatientForm.control}
+                          name="user.password"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Contraseña</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="Elija una contraseña segura" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button 
+                          type="submit" 
+                          className="w-full" 
+                          disabled={registerMutation.isPending}
+                        >
+                          {registerMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Registrando...
+                            </>
+                          ) : (
+                            "Crear Cuenta"
+                          )}
+                        </Button>
+                      </form>
+                    </Form>
+                  ) : (
+                    <Form {...registerStaffForm}>
+                      <form onSubmit={registerStaffForm.handleSubmit(onRegisterStaffSubmit)} className="space-y-4">
+                        <FormField
+                          control={registerStaffForm.control}
+                          name="user.fullName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Nombre completo</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Ingrese su nombre completo" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={registerStaffForm.control}
+                            name="user.email"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Correo electrónico</FormLabel>
+                                <FormControl>
+                                  <Input type="email" placeholder="correo@ejemplo.com" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={registerStaffForm.control}
+                            name="user.phone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Teléfono</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="+34 600 000 000" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={registerStaffForm.control}
+                            name="profile.position"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Puesto</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="Doctor, Asistente, etc." {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={registerStaffForm.control}
+                            name="profile.specialty"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Especialidad</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="Ortodoncia, Implantes, etc." {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <FormField
+                          control={registerStaffForm.control}
+                          name="user.username"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Nombre de usuario</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Elija un nombre de usuario" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={registerStaffForm.control}
+                          name="user.password"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Contraseña</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="Elija una contraseña segura" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button 
+                          type="submit" 
+                          className="w-full" 
+                          disabled={registerMutation.isPending}
+                        >
+                          {registerMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Registrando...
+                            </>
+                          ) : (
+                            "Crear Cuenta"
+                          )}
+                        </Button>
+                      </form>
+                    </Form>
+                  )}
+                  
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      ¿Ya tiene una cuenta?{" "}
+                      <Button variant="link" className="p-0 h-auto" onClick={() => setActiveTab("login")}>
+                        Iniciar sesión
+                      </Button>
+                    </p>
+                  </div>
+                </div>
               </TabsContent>
             </Tabs>
           </CardContent>
-          <CardFooter className="flex flex-col space-y-2">
-            <div className="text-sm text-center text-neutral-500">
-              By continuing, you agree to Delica Dental's Terms of Service and Privacy Policy.
-            </div>
-          </CardFooter>
         </Card>
-      </div>
-      
-      <div className="hidden lg:flex w-1/2 bg-primary-500 text-white items-center justify-center p-8">
-        <div className="max-w-md">
-          <h1 className="text-4xl font-bold mb-6">Delica Dental Clinic</h1>
-          <p className="text-lg mb-6">
-            Your comprehensive dental care management platform. Access your treatments, appointments, and dental records all in one place.
-          </p>
-          <ul className="space-y-4">
-            <li className="flex items-center">
-              <div className="rounded-full bg-white/20 p-2 mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <span>Track your treatment progress</span>
-            </li>
-            <li className="flex items-center">
-              <div className="rounded-full bg-white/20 p-2 mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <span>Manage your appointments</span>
-            </li>
-            <li className="flex items-center">
-              <div className="rounded-full bg-white/20 p-2 mr-3">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <span>View your dental images</span>
-            </li>
-          </ul>
-        </div>
       </div>
     </div>
   );

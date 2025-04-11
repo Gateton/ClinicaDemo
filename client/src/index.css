@@ -3,54 +3,11 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 47.4% 11.2%;
-    
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 47.4% 11.2%;
-    
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 47.4% 11.2%;
-    
-    --primary: 188 100% 31%;
-    --primary-foreground: 210 40% 98%;
-    
-    --secondary: 210 70% 59%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    
-    --destructive: 0 100% 50%;
-    --destructive-foreground: 210 40% 98%;
-    
-    --ring: 215 20.2% 65.1%;
-    
-    --radius: 0.5rem;
-
-    --chart-1: 188 100% 31%;
-    --chart-2: 210 70% 59%;
-    --chart-3: 199 85% 45%;
-    --chart-4: 177 77% 38%;
-    --chart-5: 166 67% 44%;
-  }
-  
   * {
     @apply border-border;
   }
-  
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-  }
 
-  .heading {
-    @apply font-sans font-semibold;
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
   }
 }

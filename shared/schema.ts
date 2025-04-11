@@ -2,152 +2,156 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// User schema
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  email: text("email").notNull().unique(),
   fullName: text("full_name").notNull(),
-  email: text("email").notNull(),
+  role: text("role").notNull().default('patient'), // 'admin', 'staff', 'patient'
   phone: text("phone"),
-  address: text("address"),
-  role: text("role").notNull().default("patient"), // patient, admin, staff
-  createdAt: timestamp("created_at").defaultNow(),
+  profileImage: text("profile_image"),
+  createdAt: timestamp("created_at").defaultNow()
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  fullName: true,
-  email: true,
-  phone: true,
-  address: true,
-  role: true,
-});
-
-// Patient profile schema
 export const patients = pgTable("patients", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   dateOfBirth: text("date_of_birth"),
-  allergies: text("allergies"),
+  gender: text("gender"),
+  address: text("address"),
+  insurance: text("insurance"),
+  occupation: text("occupation"),
+  allergies: text("allergies").array(),
+  medicalConditions: text("medical_conditions").array(),
   currentMedication: text("current_medication"),
-  medicalConditions: text("medical_conditions"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
+  medicalNotes: text("medical_notes"),
+  createdAt: timestamp("created_at").defaultNow()
 });
 
-export const insertPatientSchema = createInsertSchema(patients).pick({
-  userId: true,
-  dateOfBirth: true,
-  allergies: true,
-  currentMedication: true,
-  medicalConditions: true,
-  notes: true,
+export const staff = pgTable("staff", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  position: text("position").notNull(), // 'doctor', 'assistant', etc.
+  specialty: text("specialty"),
+  licenseNumber: text("license_number"),
+  createdAt: timestamp("created_at").defaultNow()
 });
 
-// Treatments schema
 export const treatments = pgTable("treatments", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
-  createdAt: timestamp("created_at").defaultNow(),
+  defaultDuration: integer("default_duration").notNull(), // in minutes
+  createdAt: timestamp("created_at").defaultNow()
 });
 
-export const insertTreatmentSchema = createInsertSchema(treatments).pick({
-  name: true,
-  description: true,
-});
-
-// Patient treatments schema
 export const patientTreatments = pgTable("patient_treatments", {
   id: serial("id").primaryKey(),
-  patientId: integer("patient_id").notNull().references(() => patients.id),
-  treatmentId: integer("treatment_id").notNull().references(() => treatments.id),
-  status: text("status").notNull().default("active"), // active, completed, cancelled
-  startDate: timestamp("start_date").defaultNow(),
-  endDate: timestamp("end_date"),
+  patientId: integer("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  treatmentId: integer("treatment_id").notNull().references(() => treatments.id, { onDelete: "cascade" }),
+  staffId: integer("staff_id").notNull().references(() => staff.id, { onDelete: "restrict" }),
+  status: text("status").notNull().default('pending'), // 'pending', 'in_progress', 'completed', 'cancelled'
+  progress: integer("progress").notNull().default(0), // progress percentage 0-100
   notes: text("notes"),
-  progress: integer("progress").default(0), // 0-100
-  phase: text("phase"),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date"),
+  createdAt: timestamp("created_at").defaultNow()
 });
 
-export const insertPatientTreatmentSchema = createInsertSchema(patientTreatments).pick({
-  patientId: true,
-  treatmentId: true,
-  status: true,
-  startDate: true,
-  endDate: true,
-  notes: true,
-  progress: true,
-  phase: true,
+export const treatmentSteps = pgTable("treatment_steps", {
+  id: serial("id").primaryKey(),
+  patientTreatmentId: integer("patient_treatment_id").notNull().references(() => patientTreatments.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default('pending'), // 'pending', 'completed'
+  date: timestamp("date"),
+  createdAt: timestamp("created_at").defaultNow()
 });
 
-// Appointments schema
 export const appointments = pgTable("appointments", {
   id: serial("id").primaryKey(),
-  patientId: integer("patient_id").notNull().references(() => patients.id),
-  staffId: integer("staff_id").references(() => users.id),
-  treatmentId: integer("treatment_id").references(() => treatments.id),
+  patientId: integer("patient_id").notNull().references(() => patients.id, { onDelete: "cascade" }),
+  staffId: integer("staff_id").notNull().references(() => staff.id, { onDelete: "restrict" }),
+  patientTreatmentId: integer("patient_treatment_id").references(() => patientTreatments.id, { onDelete: "set null" }),
   date: timestamp("date").notNull(),
-  duration: integer("duration").notNull().default(30), // in minutes
-  status: text("status").notNull().default("pending"), // pending, confirmed, cancelled, completed
+  duration: integer("duration").notNull(), // in minutes
+  status: text("status").notNull().default('scheduled'), // 'scheduled', 'confirmed', 'cancelled', 'completed'
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow()
 });
 
-export const insertAppointmentSchema = createInsertSchema(appointments).pick({
-  patientId: true,
-  staffId: true,
-  treatmentId: true,
-  date: true,
-  duration: true,
-  status: true,
-  notes: true,
-});
-
-// Images schema
-export const images = pgTable("images", {
+export const treatmentImages = pgTable("treatment_images", {
   id: serial("id").primaryKey(),
-  patientId: integer("patient_id").notNull().references(() => patients.id),
-  treatmentId: integer("treatment_id").references(() => treatments.id),
+  patientTreatmentId: integer("patient_treatment_id").notNull().references(() => patientTreatments.id, { onDelete: "cascade" }),
   filename: text("filename").notNull(),
-  originalName: text("original_name").notNull(),
-  type: text("type").notNull(),
-  category: text("category"), // before, after, progress
-  uploadedById: integer("uploaded_by_id").references(() => users.id),
-  isVisible: boolean("is_visible").default(true),
-  notes: text("notes"),
-  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  title: text("title").notNull(),
+  type: text("type").notNull().default('progress'), // 'before', 'progress', 'after'
+  uploadedBy: integer("uploaded_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  uploadedAt: timestamp("uploaded_at").defaultNow()
 });
 
-export const insertImageSchema = createInsertSchema(images).pick({
-  patientId: true,
-  treatmentId: true,
-  filename: true,
-  originalName: true,
-  type: true,
-  category: true,
-  uploadedById: true,
-  isVisible: true,
-  notes: true,
+// Schema for inserting users
+export const insertUserSchema = createInsertSchema(users)
+  .omit({ id: true, createdAt: true });
+
+// Schema for inserting patients
+export const insertPatientSchema = createInsertSchema(patients)
+  .omit({ id: true, createdAt: true });
+
+// Schema for inserting staff
+export const insertStaffSchema = createInsertSchema(staff)
+  .omit({ id: true, createdAt: true });
+
+// Schema for inserting treatments
+export const insertTreatmentSchema = createInsertSchema(treatments)
+  .omit({ id: true, createdAt: true });
+
+// Schema for inserting patient treatments
+export const insertPatientTreatmentSchema = createInsertSchema(patientTreatments)
+  .omit({ id: true, createdAt: true });
+
+// Schema for inserting treatment steps
+export const insertTreatmentStepSchema = createInsertSchema(treatmentSteps)
+  .omit({ id: true, createdAt: true });
+
+// Schema for inserting appointments
+export const insertAppointmentSchema = createInsertSchema(appointments)
+  .omit({ id: true, createdAt: true });
+
+// Schema for inserting treatment images
+export const insertTreatmentImageSchema = createInsertSchema(treatmentImages)
+  .omit({ id: true, uploadedAt: true });
+
+// Registration schema that combines user and patient/staff data
+export const registerUserSchema = z.object({
+  user: insertUserSchema,
+  profile: z.union([insertPatientSchema, insertStaffSchema])
 });
 
-// Define types
-export type User = typeof users.$inferSelect;
+// Auth schemas
+export const loginSchema = z.object({
+  username: z.string().min(1, 'Username is required'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+// Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
-
-export type Patient = typeof patients.$inferSelect;
 export type InsertPatient = z.infer<typeof insertPatientSchema>;
-
-export type Treatment = typeof treatments.$inferSelect;
+export type InsertStaff = z.infer<typeof insertStaffSchema>;
 export type InsertTreatment = z.infer<typeof insertTreatmentSchema>;
-
-export type PatientTreatment = typeof patientTreatments.$inferSelect;
 export type InsertPatientTreatment = z.infer<typeof insertPatientTreatmentSchema>;
-
-export type Appointment = typeof appointments.$inferSelect;
+export type InsertTreatmentStep = z.infer<typeof insertTreatmentStepSchema>;
 export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
+export type InsertTreatmentImage = z.infer<typeof insertTreatmentImageSchema>;
+export type RegisterUser = z.infer<typeof registerUserSchema>;
+export type LoginCredentials = z.infer<typeof loginSchema>;
 
-export type Image = typeof images.$inferSelect;
-export type InsertImage = z.infer<typeof insertImageSchema>;
+export type User = typeof users.$inferSelect;
+export type Patient = typeof patients.$inferSelect;
+export type Staff = typeof staff.$inferSelect;
+export type Treatment = typeof treatments.$inferSelect;
+export type PatientTreatment = typeof patientTreatments.$inferSelect;
+export type TreatmentStep = typeof treatmentSteps.$inferSelect;
+export type Appointment = typeof appointments.$inferSelect;
+export type TreatmentImage = typeof treatmentImages.$inferSelect;
