@@ -22,10 +22,85 @@ const createUploadsDir = async () => {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   setupAuth(app);
+  
+  // Development route for creating sample users
+  app.post("/api/sample-users", async (_req, res) => {
+    try {
+      // Create admin user
+      const adminUser = await storage.createUser({
+        username: "admin",
+        password: "admin123",
+        email: "admin@delica.com",
+        fullName: "Administrador",
+        role: "admin",
+        phone: "+34 600 123 456",
+        profileImage: null
+      });
+      
+      await storage.createStaff({
+        userId: adminUser.id,
+        position: "Director Médico",
+        specialty: "Ortodoncia",
+        licenseNumber: "MED-12345"
+      });
+      
+      // Create a staff member
+      const dentistUser = await storage.createUser({
+        username: "dentista",
+        password: "dentista123",
+        email: "dentista@delica.com",
+        fullName: "Dr. Carlos Pérez",
+        role: "staff",
+        phone: "+34 600 789 012",
+        profileImage: null
+      });
+      
+      await storage.createStaff({
+        userId: dentistUser.id,
+        position: "Dentista",
+        specialty: "Odontología General",
+        licenseNumber: "MED-67890"
+      });
+      
+      // Create a patient
+      const patientUser = await storage.createUser({
+        username: "paciente",
+        password: "paciente123",
+        email: "paciente@example.com",
+        fullName: "Ana Martínez",
+        role: "patient",
+        phone: "+34 600 456 789",
+        profileImage: null
+      });
+      
+      await storage.createPatient({
+        userId: patientUser.id,
+        dateOfBirth: "1985-06-15",
+        gender: "femenino",
+        address: "Calle Principal 123, Madrid",
+        insurance: "Sanitas",
+        occupation: "Profesora",
+        allergies: ["Penicilina"],
+        medicalConditions: []
+      });
+      
+      res.status(201).json({ 
+        message: "Sample users created successfully", 
+        users: {
+          admin: { username: "admin", password: "admin123" },
+          dentist: { username: "dentista", password: "dentista123" },
+          patient: { username: "paciente", password: "paciente123" }
+        }
+      });
+    } catch (err) {
+      console.error("Failed to create sample users:", err);
+      res.status(500).json({ message: "Failed to create sample users" });
+    }
+  });
 
   // Setup file uploads
   const uploadsDir = await createUploadsDir();
-  const storage = multer.diskStorage({
+  const fileStorage = multer.diskStorage({
     destination: (_req, _file, cb) => {
       cb(null, uploadsDir);
     },
@@ -37,7 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   const upload = multer({ 
-    storage,
+    storage: fileStorage,
     limits: {
       fileSize: 5 * 1024 * 1024, // 5MB limit
     },
