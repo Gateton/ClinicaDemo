@@ -13,6 +13,8 @@ import { insertUserSchema } from '@shared/schema';
 
 const patientSchema = insertUserSchema.extend({
   confirmPassword: z.string().min(1, "Please confirm your password"),
+  dateOfBirth: z.string().optional(),
+  address: z.string().optional(),
   allergies: z.string().optional(),
   currentMedication: z.string().optional(),
   medicalConditions: z.string().optional(),
@@ -37,6 +39,21 @@ export function PatientForm({ patientId, defaultValues, onSuccess }: PatientForm
   
   const isEditing = !!patientId;
 
+  // Update the schema to include all fields
+  const patientSchema = insertUserSchema.extend({
+    confirmPassword: z.string().min(1, "Please confirm your password"),
+    dateOfBirth: z.string().optional(),
+    address: z.string().optional(),
+    allergies: z.string().optional(),
+    currentMedication: z.string().optional(),
+    medicalConditions: z.string().optional(),
+    notes: z.string().optional(),
+  }).refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
+  
+  // Update default values to include all fields
   const form = useForm<PatientFormValues>({
     resolver: zodResolver(patientSchema),
     defaultValues: defaultValues || {
@@ -55,6 +72,27 @@ export function PatientForm({ patientId, defaultValues, onSuccess }: PatientForm
       notes: '',
     },
   });
+  
+  // Update phone field to handle null values
+  <FormField
+    control={form.control}
+    name="phone"
+    render={({ field }) => (
+      <FormItem>
+        <FormLabel>Teléfono</FormLabel>
+        <FormControl>
+          <Input 
+            placeholder="+34 612 345 678"
+            value={field.value ?? ''}
+            onChange={field.onChange}
+            onBlur={field.onBlur}
+            ref={field.ref}
+          />
+        </FormControl>
+        <FormMessage />
+      </FormItem>
+    )}
+  />
 
   const createPatientMutation = useMutation({
     mutationFn: async (data: PatientFormValues) => {
@@ -225,7 +263,7 @@ export function PatientForm({ patientId, defaultValues, onSuccess }: PatientForm
               <FormItem>
                 <FormLabel>Teléfono</FormLabel>
                 <FormControl>
-                  <Input placeholder="+34 612 345 678" {...field} />
+              
                 </FormControl>
                 <FormMessage />
               </FormItem>

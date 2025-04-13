@@ -14,27 +14,27 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 interface ImageUploadProps {
-  patientTreatmentId: number;
-  onUploadComplete?: () => void;
-  defaultType?: 'before' | 'progress' | 'after';
-  maxWidth?: number;
+  onSuccess?: () => void;
+  patientId: number;
+  treatmentId?: number;
 }
 
+// Add these definitions before the component
 const formSchema = z.object({
-  title: z.string().min(1, 'El título es requerido'),
-  type: z.enum(['before', 'progress', 'after'], {
-    required_error: 'El tipo de imagen es requerido',
-  }),
+  title: z.string().min(1, "El título es requerido"),
+  type: z.enum(["before", "progress", "after"]),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-const ImageUpload: React.FC<ImageUploadProps> = ({
-  patientTreatmentId,
-  onUploadComplete,
-  defaultType = 'progress',
-  maxWidth = 400,
-}) => {
+const defaultType = "progress";
+const maxWidth = 600;
+
+export function ImageUpload({ 
+  onSuccess, 
+  patientId, 
+  treatmentId: patientTreatmentId = 0 // Provide default value
+}: ImageUploadProps) {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -52,7 +52,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     },
   });
 
-  // Mutation for uploading image
+  // Update the onSuccess callback in the mutation
   const uploadMutation = useMutation({
     mutationFn: async (data: FormData) => {
       setIsUploading(true);
@@ -109,8 +109,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       setFile(null);
       setPreviewUrl(null);
       
-      if (onUploadComplete) {
-        onUploadComplete();
+      if (onSuccess) {
+        onSuccess(); // Use onSuccess instead of onUploadComplete
       }
     },
     onError: (error: Error) => {
@@ -193,7 +193,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     }
   };
 
-  // Form submission handler
+  // Update form submission handler to handle undefined patientTreatmentId
   const onSubmit = (data: FormValues) => {
     if (!file) {
       toast({
@@ -208,7 +208,10 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     formData.append('image', file);
     formData.append('title', data.title);
     formData.append('type', data.type);
-    formData.append('patientTreatmentId', patientTreatmentId.toString());
+    formData.append('patientId', patientId.toString());
+    if (patientTreatmentId) {
+      formData.append('patientTreatmentId', patientTreatmentId.toString());
+    }
     
     uploadMutation.mutate(formData);
   };

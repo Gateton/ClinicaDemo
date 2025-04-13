@@ -131,7 +131,7 @@ export default function TreatmentsSummary() {
                         {getTreatmentName(treatment.treatmentId)}
                       </div>
                       <div className="text-xs text-neutral-500">
-                        {treatment.phase || "Fase inicial"}
+                        {treatment.notes || "Fase inicial"}
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">

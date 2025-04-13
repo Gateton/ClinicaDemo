@@ -99,7 +99,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         <div className="p-4 border-t border-neutral-700">
           <div className="flex items-center">
             <Avatar>
-              <AvatarImage src={user?.profileImage} />
+              <AvatarImage src={user?.profileImage || undefined} />
               <AvatarFallback className="bg-primary-700">{userInitials}</AvatarFallback>
             </Avatar>
             <div className="ml-3">
@@ -128,7 +128,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         </div>
         <div className="ml-auto">
           <Avatar onClick={() => setLogoutDialogOpen(true)}>
-            <AvatarImage src={user?.profileImage} />
+            <AvatarImage src={user?.profileImage || undefined} />
             <AvatarFallback className="bg-primary-700">{userInitials}</AvatarFallback>
           </Avatar>
         </div>

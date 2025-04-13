@@ -86,11 +86,14 @@ const AdminPatients = () => {
   });
 
   // Filter patients based on search term
-  const filteredPatients = patients?.filter(patient => 
-    patient.user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    patient.user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (patient.user.phone && patient.user.phone.includes(searchTerm))
-  );
+  const filteredPatients = patients?.filter(patient => {
+    const user = patient.user || {};
+    return (
+      (user.fullName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (user.phone?.includes(searchTerm) || false)
+    );
+  });
 
   // Helper function to get initials from a name
   const getInitials = (name: string) => {
@@ -237,11 +240,16 @@ const AdminPatients = () => {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar>
-                              <AvatarImage src={patient.user.profileImage} alt={patient.user.fullName} />
-                              <AvatarFallback className="bg-primary-100 text-primary-700">{getInitials(patient.user.fullName)}</AvatarFallback>
+                              <AvatarImage 
+                                src={patient.user?.profileImage} 
+                                alt={patient.user?.fullName || 'Patient'} 
+                              />
+                              <AvatarFallback className="bg-primary-100 text-primary-700">
+                                {getInitials(patient.user?.fullName || '')}
+                              </AvatarFallback>
                             </Avatar>
                             <div>
-                              <div className="font-medium">{patient.user.fullName}</div>
+                              <div className="font-medium">{patient.user?.fullName || 'Nombre no disponible'}</div>
                               <div className="text-xs text-muted-foreground">
                                 {patient.dateOfBirth && `${patient.gender}, ${patient.dateOfBirth}`}
                               </div>
@@ -252,11 +260,11 @@ const AdminPatients = () => {
                           <div className="flex flex-col space-y-1">
                             <div className="flex items-center text-sm">
                               <Phone className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
-                              <span>{patient.user.phone || 'No registrado'}</span>
+                              <span>{patient.user?.phone || 'No registrado'}</span>
                             </div>
                             <div className="flex items-center text-sm">
                               <Mail className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
-                              <span>{patient.user.email}</span>
+                              <span>{patient.user?.email || 'No registrado'}</span>
                             </div>
                           </div>
                         </TableCell>

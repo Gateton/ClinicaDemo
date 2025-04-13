@@ -15,8 +15,15 @@ export default function PatientsList() {
   
   // Sort patients by creation date (most recent first)
   const recentPatients = patients?.sort((a, b) => {
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateB - dateA;
   }).slice(0, 5) || [];
+  
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return 'No registrada';
+    return format(new Date(date), "dd/MM/yyyy");
+  };
   
   if (isLoading) {
     return (
@@ -38,9 +45,10 @@ export default function PatientsList() {
     );
   }
   
-  const formatDate = (date: Date | string) => {
-    return format(new Date(date), "dd/MM/yyyy");
-  };
+  // Remove this duplicate declaration
+  // const formatDate = (date: Date | string) => {
+  //   return format(new Date(date), "dd/MM/yyyy");
+  // };
   
   return (
     <Card className="h-full">

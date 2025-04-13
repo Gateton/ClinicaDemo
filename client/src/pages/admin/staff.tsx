@@ -110,11 +110,11 @@ const AdminStaff = () => {
 
   // Filter staff based on search term
   const filteredStaff = staffMembers?.filter(staff => 
-    staff.user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    staff.user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    staff.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (staff.specialty && staff.specialty.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (staff.user.phone && staff.user.phone.includes(searchTerm))
+    staff?.user?.fullName?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
+    staff?.user?.email?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
+    staff?.position?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
+    (staff?.specialty && staff.specialty.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (staff?.user?.phone && staff.user.phone.includes(searchTerm))
   );
 
   // Helper function to get initials from a name
@@ -227,20 +227,26 @@ const AdminStaff = () => {
                     <CardContent className="-mt-12 relative">
                       <div className="absolute top-0 left-1/2 -translate-x-1/2">
                         <Avatar className="h-24 w-24 border-4 border-white">
-                          <AvatarImage src={staff.user.profileImage} alt={staff.user.fullName} />
+                          {staff?.user?.profileImage ? (
+                            <AvatarImage src={staff.user.profileImage} alt={staff?.user?.fullName || 'Staff member'} />
+                          ) : null}
                           <AvatarFallback className="bg-primary-100 text-primary-700 text-xl">
-                            {getInitials(staff.user.fullName)}
+                            {staff?.user?.fullName ? getInitials(staff.user.fullName) : 'SM'}
                           </AvatarFallback>
                         </Avatar>
                       </div>
                       <div className="pt-16 text-center">
-                        <h3 className="text-xl font-semibold">{staff.user.fullName}</h3>
-                        <p className="text-muted-foreground mb-3">{staff.position}</p>
+                        <h3 className="text-xl font-semibold">
+                          {staff?.user?.fullName || 'Nombre no disponible'}
+                        </h3>
+                        <p className="text-muted-foreground mb-3">
+                          {staff?.position || 'Posición no disponible'}
+                        </p>
                         <div className="flex justify-center gap-2 mb-4">
-                          <Badge variant="outline" className={staff.user.role === 'admin' ? 'bg-purple-100 text-purple-800 border-purple-200' : 'bg-blue-100 text-blue-800 border-blue-200'}>
-                            {getRoleLabel(staff.user.role)}
+                          <Badge variant="outline" className={staff?.user?.role === 'admin' ? 'bg-purple-100 text-purple-800 border-purple-200' : 'bg-blue-100 text-blue-800 border-blue-200'}>
+                            {staff?.user?.role ? getRoleLabel(staff.user.role) : 'Rol no disponible'}
                           </Badge>
-                          {staff.specialty && (
+                          {staff?.specialty && (
                             <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
                               {staff.specialty}
                             </Badge>
@@ -250,9 +256,9 @@ const AdminStaff = () => {
                         <div className="text-sm text-neutral-600 space-y-2">
                           <div className="flex items-center justify-center">
                             <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                            <span>{staff.user.email}</span>
+                            <span>{staff?.user?.email || 'Email no disponible'}</span>
                           </div>
-                          {staff.user.phone && (
+                          {staff?.user?.phone && (
                             <div className="flex items-center justify-center">
                               <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
                               <span>{staff.user.phone}</span>

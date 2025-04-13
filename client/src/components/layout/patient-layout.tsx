@@ -79,7 +79,7 @@ const PatientLayout: React.FC<PatientLayoutProps> = ({ children }) => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 flex items-center gap-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.profileImage} />
+                  <AvatarImage src={user?.profileImage || undefined} />
                   <AvatarFallback className="bg-primary-100 text-primary-700">{userInitials}</AvatarFallback>
                 </Avatar>
                 <span className="text-sm font-medium text-neutral-800 hidden md:block">

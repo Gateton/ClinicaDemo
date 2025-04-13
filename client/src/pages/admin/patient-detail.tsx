@@ -221,19 +221,24 @@ const PatientDetail = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              {isLoadingPatient ? (
-                <>
-                  <Skeleton className="h-8 w-48 mb-1" />
-                  <Skeleton className="h-5 w-36" />
-                </>
-              ) : (
-                <>
-                  <h1 className="text-2xl font-semibold text-neutral-900">{patient?.user.fullName}</h1>
-                  <p className="text-neutral-600">
-                    Paciente desde: {patient?.since ? format(new Date(patient.since), "MMMM yyyy", { locale: es }) : 'No disponible'}
-                  </p>
-                </>
-              )}
+            
+
+{isLoadingPatient ? (
+  <>
+    <Skeleton className="h-8 w-48 mb-1" />
+    <Skeleton className="h-5 w-36" />
+  </>
+) : (
+  <>
+    <h1 className="text-2xl font-semibold text-neutral-900">
+      {patient?.user?.fullName || 'Nombre no disponible'}
+    </h1>
+    <p className="text-neutral-600">
+      Paciente desde: {patient?.since ? format(new Date(patient.since), "MMMM yyyy", { locale: es }) : 'No disponible'}
+    </p>
+  </>
+)}
+
             </div>
           </div>
           <div className="mt-4 md:mt-0 flex space-x-2">
@@ -301,23 +306,30 @@ const PatientDetail = () => {
               ) : (
                 <>
                   <div className="flex items-center mb-4">
-                    <Avatar className="h-16 w-16">
-                      <AvatarImage src={patient?.user.profileImage} alt={patient?.user.fullName} />
-                      <AvatarFallback className="bg-primary-100 text-primary-700 text-lg">
-                        {getInitials(patient?.user.fullName || "")}
-                      </AvatarFallback>
-                    </Avatar>
+
+<Avatar className="h-16 w-16">
+  <AvatarImage 
+    src={patient?.user?.profileImage} 
+    alt={patient?.user?.fullName || 'Patient'} 
+  />
+  <AvatarFallback className="bg-primary-100 text-primary-700 text-lg">
+    {getInitials(patient?.user?.fullName || "")}
+  </AvatarFallback>
+</Avatar>
+
                     <div className="ml-4">
-                      <div className="flex flex-col space-y-1">
-                        <div className="flex items-center">
-                          <Phone className="h-4 w-4 mr-1 text-neutral-500" />
-                          <p className="text-sm font-medium text-neutral-900">{patient?.user.phone || "No registrado"}</p>
-                        </div>
-                        <div className="flex items-center">
-                          <Mail className="h-4 w-4 mr-1 text-neutral-500" />
-                          <p className="text-sm font-medium text-neutral-900">{patient?.user.email}</p>
-                        </div>
-                      </div>
+
+<div className="flex flex-col space-y-1">
+  <div className="flex items-center">
+    <Phone className="h-4 w-4 mr-1 text-neutral-500" />
+    <p className="text-sm font-medium text-neutral-900">{patient?.user?.phone || "No registrado"}</p>
+  </div>
+  <div className="flex items-center">
+    <Mail className="h-4 w-4 mr-1 text-neutral-500" />
+    <p className="text-sm font-medium text-neutral-900">{patient?.user?.email || "No registrado"}</p>
+  </div>
+</div>
+
                     </div>
                   </div>
                   
@@ -520,26 +532,31 @@ const PatientDetail = () => {
                   <div>
                     <p className="text-sm text-neutral-600 mb-2">Historial de Tratamientos</p>
                     <ul className="space-y-3">
-                      {treatments
-                        .filter(t => t.status === 'completed')
-                        .slice(0, 3)
-                        .map(treatment => (
-                          <li key={treatment.id} className="flex items-start">
-                            <div className="mt-1 bg-green-100 p-1 rounded-full text-green-800">
-                              <Check className="h-3 w-3" />
-                            </div>
-                            <div className="ml-3">
-                              <p className="text-sm font-medium text-neutral-900">{treatment.name}</p>
-                              <p className="text-xs text-neutral-500">
-                                Completado: {treatment.endDate ? format(new Date(treatment.endDate), "dd/MM/yyyy", { locale: es }) : 'Fecha no registrada'}
-                              </p>
-                            </div>
-                          </li>
-                        ))}
-                      
-                      {treatments.filter(t => t.status === 'completed').length === 0 && (
-                        <li className="text-sm text-neutral-500">No hay tratamientos completados</li>
-                      )}
+                    // Around line 523
+<div>
+  <p className="text-sm text-neutral-600 mb-2">Historial de Tratamientos</p>
+  <ul className="space-y-3">
+    {treatments?.filter(t => t.status === 'completed')
+      .slice(0, 3)
+      .map(treatment => (
+        <li key={treatment.id} className="flex items-start">
+          <div className="mt-1 bg-green-100 p-1 rounded-full text-green-800">
+            <Check className="h-3 w-3" />
+          </div>
+          <div className="ml-3">
+            <p className="text-sm font-medium text-neutral-900">{treatment.name}</p>
+            <p className="text-xs text-neutral-500">
+              Completado: {treatment.endDate ? format(new Date(treatment.endDate), "dd/MM/yyyy", { locale: es }) : 'Fecha no registrada'}
+            </p>
+          </div>
+        </li>
+      ))}
+    
+    {treatments?.filter(t => t.status === 'completed').length === 0 && (
+      <li className="text-sm text-neutral-500">No hay tratamientos completados</li>
+    )}
+  </ul>
+</div>
                     </ul>
                   </div>
                 </>
@@ -580,49 +597,90 @@ const PatientDetail = () => {
                   {/* Current Treatment */}
                   <div>
                     <h3 className="text-lg font-medium text-neutral-900 mb-4">Tratamiento Actual</h3>
-                    {isLoadingTreatments ? (
-                      <Card>
-                        <CardContent className="p-4">
-                          <Skeleton className="h-6 w-40 mb-2" />
-                          <Skeleton className="h-4 w-full mb-4" />
-                          <Skeleton className="h-4 w-full mb-1" />
-                          <Skeleton className="h-3 w-16 mb-4" />
-                          <Skeleton className="h-5 w-40 mb-3" />
-                          <div className="space-y-3">
-                            {Array(3).fill(0).map((_, i) => (
-                              <div key={i} className="flex">
-                                <Skeleton className="h-5 w-5 rounded-full mr-3" />
-                                <div className="flex-1">
-                                  <Skeleton className="h-4 w-28 mb-1" />
-                                  <Skeleton className="h-3 w-20 mb-1" />
-                                  <Skeleton className="h-3 w-full" />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ) : currentTreatment ? (
-                      <Card>
-                        <CardContent className="p-4">
-                          <TreatmentProgress
-                            treatmentName={currentTreatment.name}
-                            description={currentTreatment.description}
-                            progress={currentTreatment.progress}
-                            status={currentTreatment.status}
-                            steps={currentTreatment.steps}
-                            nextAppointmentDate={nextAppointment?.date}
-                          />
-                        </CardContent>
-                      </Card>
+                   
+
+{isLoadingTreatments ? (
+  <Card>
+    <CardContent className="p-4">
+      <Skeleton className="h-6 w-40 mb-2" />
+      <Skeleton className="h-4 w-full mb-4" />
+      <Skeleton className="h-4 w-full mb-1" />
+      <Skeleton className="h-3 w-16 mb-4" />
+      <Skeleton className="h-5 w-40 mb-3" />
+      <div className="space-y-3">
+        {Array(3).fill(0).map((_, i) => (
+          <div key={i} className="flex">
+            <Skeleton className="h-5 w-5 rounded-full mr-3" />
+            <div className="flex-1">
+              <Skeleton className="h-4 w-28 mb-1" />
+              <Skeleton className="h-3 w-20 mb-1" />
+              <Skeleton className="h-3 w-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+) : currentTreatment ? (
+  <Card>
+    <CardContent className="p-4">
+      <div>
+        <p className="text-sm font-medium text-neutral-900">{currentTreatment.name}</p>
+        <p className="text-sm text-neutral-600 mt-1">{currentTreatment.description}</p>
+        
+        <div className="mt-4">
+          <div className="w-full bg-neutral-200 rounded-full h-2.5">
+            <div 
+              className="bg-primary-500 h-2.5 rounded-full" 
+              style={{ width: `${currentTreatment.progress}%` }}
+            ></div>
+          </div>
+          <p className="text-xs text-neutral-500 mt-1">
+            Progreso: {currentTreatment.progress}% completado
+          </p>
+        </div>
+
+        <div className="mt-6">
+          <p className="text-sm font-medium text-neutral-900 mb-3">Pasos del Tratamiento</p>
+          <div className="space-y-3">
+            {currentTreatment.steps?.length ? (
+              currentTreatment.steps.map((step) => (
+                <div key={step.id} className="flex items-start">
+                  <div className={`p-1 rounded-full mt-0.5 ${step.status === 'completed' ? 'bg-green-100 text-green-600' : 'bg-neutral-100 text-neutral-500'}`}>
+                    {step.status === 'completed' ? (
+                      <Check className="h-3 w-3" />
                     ) : (
-                      <Card>
-                        <CardContent className="p-6 text-center">
-                          <p className="text-neutral-500 mb-4">No hay tratamientos activos</p>
-                          <Button>Iniciar nuevo tratamiento</Button>
-                        </CardContent>
-                      </Card>
+                      <div className="h-3 w-3 rounded-full bg-neutral-300" />
                     )}
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-neutral-900">{step.name}</p>
+                    <p className="text-xs text-neutral-500">{step.description}</p>
+                    {step.date && (
+                      <p className="text-xs text-neutral-500 mt-1">
+                        {format(new Date(step.date), "d MMM yyyy", { locale: es })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-neutral-500">No hay pasos de tratamiento definidos</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+) : (
+  <Card>
+    <CardContent className="p-6 text-center">
+      <p className="text-neutral-500 mb-4">No hay tratamientos activos</p>
+      <Button>Iniciar nuevo tratamiento</Button>
+    </CardContent>
+  </Card>
+)}
+
                   </div>
                   
                   {/* Recent Appointments */}

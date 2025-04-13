@@ -72,6 +72,7 @@ interface AppointmentFormProps {
   appointment?: Appointment;
   onSuccess: () => void;
   defaultDate?: Date;
+  isPatientRequest?: boolean;
 }
 
 // Time options for the select

@@ -15,6 +15,19 @@ interface StatCardProps {
   linkHref: string;
 }
 
+interface DashboardStats {
+  // Patient stats
+  treatments: number;
+  upcomingAppointments: number;
+  images: number;
+  totalAppointments: number;
+  // Admin stats
+  patientCount: number;
+  todayAppointments: number;
+  activeTreatments: number;
+  storedImages: number;
+}
+
 function StatCard({ icon, iconBgColor, iconColor, title, value, linkText, linkHref }: StatCardProps) {
   const [, setLocation] = useLocation();
   
@@ -57,7 +70,7 @@ export default function StatsOverview() {
   const { user } = useAuth();
   const isPatient = user?.role === "patient";
   
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/stats"],
   });
   

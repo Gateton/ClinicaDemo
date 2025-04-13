@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -9,7 +9,14 @@ import { User, loginSchema } from "@shared/schema";
 
 declare global {
   namespace Express {
-    interface User extends User {}
+    // Fix the recursive type reference by using a more specific interface
+    interface User {
+      id: number;
+      role: string;
+      // Add other User properties you need here
+      username: string;
+      password: string;
+    }
   }
 }
 
@@ -154,7 +161,7 @@ export function setupAuth(app: Express) {
 }
 
 // Middleware to ensure a user is authenticated
-export function ensureAuthenticated(req: Express.Request, res: Express.Response, next: Express.NextFunction) {
+export function ensureAuthenticated(req: Request, res: Response, next: NextFunction) {
   if (req.isAuthenticated()) {
     return next();
   }
@@ -163,12 +170,13 @@ export function ensureAuthenticated(req: Express.Request, res: Express.Response,
 
 // Middleware to ensure a user has the correct role
 export function ensureRole(roles: string[]) {
-  return (req: Express.Request, res: Express.Response, next: Express.NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
     
-    const userRole = (req.user as User).role;
+    // Now TypeScript knows req.user has a role property
+    const userRole = req.user.role;
     if (!roles.includes(userRole)) {
       return res.status(403).json({ message: "Forbidden" });
     }

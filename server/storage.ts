@@ -65,7 +65,7 @@ export interface IStorage {
   registerStaff(userData: InsertUser, staffData: InsertStaff): Promise<User>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: any; // Change the type to 'any' to avoid type conflicts
 }
 
 export class MemStorage implements IStorage {
@@ -78,7 +78,7 @@ export class MemStorage implements IStorage {
   private appointments: Map<number, Appointment>;
   private treatmentImages: Map<number, TreatmentImage>;
   
-  sessionStore: session.SessionStore;
+  sessionStore: any; // Change the type to 'any'
   currentId: number;
 
   constructor() {
@@ -116,7 +116,14 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentId++;
     const now = new Date();
-    const user: User = { ...insertUser, id, createdAt: now };
+    const user: User = { 
+      ...insertUser, 
+      id, 
+      createdAt: now,
+      role: insertUser.role || 'patient', // Provide default value
+      phone: insertUser.phone || null,
+      profileImage: insertUser.profileImage || null
+    };
     this.users.set(id, user);
     return user;
   }
@@ -148,7 +155,20 @@ export class MemStorage implements IStorage {
   async createPatient(insertPatient: InsertPatient): Promise<Patient> {
     const id = this.currentId++;
     const now = new Date();
-    const patient: Patient = { ...insertPatient, id, createdAt: now };
+    const patient: Patient = { 
+      ...insertPatient, 
+      id, 
+      createdAt: now,
+      dateOfBirth: insertPatient.dateOfBirth || null,
+      gender: insertPatient.gender || null,
+      address: insertPatient.address || null,
+      insurance: insertPatient.insurance || null,
+      occupation: insertPatient.occupation || null,
+      allergies: insertPatient.allergies || null,
+      medicalConditions: insertPatient.medicalConditions || null,
+      currentMedication: insertPatient.currentMedication || null,
+      medicalNotes: insertPatient.medicalNotes || null
+    };
     this.patients.set(id, patient);
     return patient;
   }
@@ -180,7 +200,13 @@ export class MemStorage implements IStorage {
   async createStaff(insertStaff: InsertStaff): Promise<Staff> {
     const id = this.currentId++;
     const now = new Date();
-    const staff: Staff = { ...insertStaff, id, createdAt: now };
+    const staff: Staff = { 
+      ...insertStaff, 
+      id, 
+      createdAt: now,
+      specialty: insertStaff.specialty || null,
+      licenseNumber: insertStaff.licenseNumber || null
+    };
     this.staff.set(id, staff);
     return staff;
   }
@@ -206,12 +232,16 @@ export class MemStorage implements IStorage {
   async createTreatment(insertTreatment: InsertTreatment): Promise<Treatment> {
     const id = this.currentId++;
     const now = new Date();
-    const treatment: Treatment = { ...insertTreatment, id, createdAt: now };
+    const treatment: Treatment = { 
+      ...insertTreatment, 
+      id, 
+      createdAt: now,
+      description: insertTreatment.description || null
+    };
     this.treatments.set(id, treatment);
     return treatment;
   }
 
-  // Patient Treatment management
   async getPatientTreatmentById(id: number): Promise<PatientTreatment | undefined> {
     return this.patientTreatments.get(id);
   }
@@ -224,7 +254,15 @@ export class MemStorage implements IStorage {
   async createPatientTreatment(insertPatientTreatment: InsertPatientTreatment): Promise<PatientTreatment> {
     const id = this.currentId++;
     const now = new Date();
-    const patientTreatment: PatientTreatment = { ...insertPatientTreatment, id, createdAt: now };
+    const patientTreatment: PatientTreatment = { 
+      ...insertPatientTreatment, 
+      id, 
+      createdAt: now,
+      status: insertPatientTreatment.status || 'pending',
+      progress: insertPatientTreatment.progress || 0,
+      notes: insertPatientTreatment.notes || null,
+      endDate: insertPatientTreatment.endDate || null
+    };
     this.patientTreatments.set(id, patientTreatment);
     return patientTreatment;
   }
@@ -247,7 +285,6 @@ export class MemStorage implements IStorage {
     return updatedTreatment;
   }
 
-  // Treatment Step management
   async getTreatmentStepById(id: number): Promise<TreatmentStep | undefined> {
     return this.treatmentSteps.get(id);
   }
@@ -260,7 +297,14 @@ export class MemStorage implements IStorage {
   async createTreatmentStep(insertTreatmentStep: InsertTreatmentStep): Promise<TreatmentStep> {
     const id = this.currentId++;
     const now = new Date();
-    const treatmentStep: TreatmentStep = { ...insertTreatmentStep, id, createdAt: now };
+    const treatmentStep: TreatmentStep = { 
+      ...insertTreatmentStep, 
+      id, 
+      createdAt: now,
+      status: insertTreatmentStep.status || 'pending',
+      date: insertTreatmentStep.date || null,
+      description: insertTreatmentStep.description || null
+    };
     this.treatmentSteps.set(id, treatmentStep);
     return treatmentStep;
   }
@@ -278,7 +322,6 @@ export class MemStorage implements IStorage {
     return updatedStep;
   }
 
-  // Appointment management
   async getAppointmentById(id: number): Promise<Appointment | undefined> {
     return this.appointments.get(id);
   }
@@ -300,7 +343,14 @@ export class MemStorage implements IStorage {
   async createAppointment(insertAppointment: InsertAppointment): Promise<Appointment> {
     const id = this.currentId++;
     const now = new Date();
-    const appointment: Appointment = { ...insertAppointment, id, createdAt: now };
+    const appointment: Appointment = { 
+      ...insertAppointment, 
+      id, 
+      createdAt: now,
+      status: insertAppointment.status || 'scheduled',
+      notes: insertAppointment.notes || null,
+      patientTreatmentId: insertAppointment.patientTreatmentId || null
+    };
     this.appointments.set(id, appointment);
     return appointment;
   }
@@ -314,7 +364,6 @@ export class MemStorage implements IStorage {
     return updatedAppointment;
   }
 
-  // Treatment Image management
   async getTreatmentImageById(id: number): Promise<TreatmentImage | undefined> {
     return this.treatmentImages.get(id);
   }
@@ -327,7 +376,12 @@ export class MemStorage implements IStorage {
   async saveTreatmentImage(insertTreatmentImage: InsertTreatmentImage): Promise<TreatmentImage> {
     const id = this.currentId++;
     const now = new Date();
-    const treatmentImage: TreatmentImage = { ...insertTreatmentImage, id, uploadedAt: now };
+    const treatmentImage: TreatmentImage = { 
+      ...insertTreatmentImage, 
+      id, 
+      uploadedAt: now,
+      type: insertTreatmentImage.type || 'other' // Provide a default value
+    };
     this.treatmentImages.set(id, treatmentImage);
     return treatmentImage;
   }

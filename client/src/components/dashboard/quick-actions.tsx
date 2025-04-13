@@ -5,8 +5,8 @@ import { UserPlus, CalendarPlus, Torus, FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useState } from 'react';
 import { PatientForm } from '@/components/patients/patient-form';
-import { AppointmentForm } from '@/components/appointments/appointment-form';
-import { TreatmentForm } from '@/components/treatments/treatment-form';
+import AppointmentForm from '../admin/appointment-form';
+import TreatmentForm from '../admin/treatment-form';
 
 interface QuickAction {
   title: string;

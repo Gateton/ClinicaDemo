@@ -81,7 +81,7 @@ export default function AppointmentsList() {
     }
   };
   
-  const formatTime = (date: string) => {
+  const formatTime = (date: string | Date) => {
     return format(new Date(date), "h:mm a", { locale: es });
   };
   

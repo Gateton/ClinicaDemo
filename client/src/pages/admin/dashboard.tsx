@@ -43,7 +43,7 @@ interface Appointment {
 
 interface Activity {
   id: number;
-  description: string;
+  description: React.ReactNode; // Change from string to ReactNode
   time: string;
   iconBg: string;
   icon: React.ReactNode;
@@ -169,7 +169,8 @@ const AdminDashboard = () => {
   }, [appointments, patients]);
 
   // Helper function to get initials from a name
-  const getInitials = (name: string) => {
+  const getInitials = (name?: string | null) => {
+    if (!name) return 'U'; // Return 'U' for undefined/null/empty
     return name
       .split(' ')
       .map(part => part[0])
